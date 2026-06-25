@@ -1,10 +1,9 @@
-"use client";
+  "use client";
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function AdminPage() {
-  // 📂 디자인 패치 3: 'archived'(보관함) 탭 신설하여 총 4개 분할 내비게이션
   const [activeTab, setActiveTab] = useState<"status" | "users" | "create" | "archived">("status");
   
   const [surveys, setSurveys] = useState<any[]>([]);
@@ -104,7 +103,7 @@ export default function AdminPage() {
     const { error } = await supabase.from("surveys").insert([newSurveyData]);
     if (error) return alert("생성 실패: " + error.message);
     
-    alert("📢 새로운 투표가 생성되었습니다! 단원 단톡방에 링크를 공유하세요!");
+    alert("📢 새로운 투표가 생성되었습니다! [현황판]에서 카톡 알림 텍스트를 복사해 보세요!");
     setNewTitle(""); setNewDates([]); setStartTime(""); setEndTime("");
     setActiveTab("status");
     fetchData(); 
@@ -123,7 +122,6 @@ export default function AdminPage() {
     setSelectedSurvey({ ...selectedSurvey, status: "finalized", final_schedule: finalSchedule }); 
   };
 
-  // 📂 디자인 패치 4: 일정을 완전 삭제하는 대신 'archived'(보관됨) 상태로 안전하게 숨기는 기능
   const handleArchiveSurvey = async (id: string) => {
     if (!window.confirm("이 일정을 조원 화면에서 숨기고 과거 보관함으로 이동하시겠습니까?")) return;
     const { error } = await supabase.from("surveys").update({ status: "archived" }).eq("id", id);
@@ -193,7 +191,6 @@ export default function AdminPage() {
   });
   const sortedSlots = Object.entries(slotCounts).sort((a, b) => b[1] - a[1]);
 
-  // 📊 디자인 패치 5: 시각적 게이지 바를 그리기 위해 최대 득표수 파악
   const maxVotes = sortedSlots.length > 0 ? sortedSlots[0][1] : 1;
 
   const attending = currentRsvpResponses.filter((r) => r.status === "참석");
@@ -211,7 +208,6 @@ export default function AdminPage() {
     }
   });
 
-  // 📂 내비게이션용 필터 구별 분기 목록
   const activeAndFinalizedSurveys = surveys.filter(s => s.status === "active" || s.status === "finalized");
   const archivedSurveys = surveys.filter(s => s.status === "archived");
 
@@ -225,7 +221,6 @@ export default function AdminPage() {
           <h1 className="text-xl font-black text-slate-900 tracking-tight mt-1.5">📋 선교 조교 대시보드</h1>
         </div>
         
-        {/* 네비게이션 탭 리디자인 (4분할) */}
         <div className="grid grid-cols-4 gap-0.5 bg-slate-100 p-1 rounded-xl mb-4 border border-slate-200/40">
           <button onClick={() => { setActiveTab("status"); setSelectedSurvey(null); }} className={`text-center py-2 text-[11px] font-black rounded-lg transition-all ${activeTab === "status" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
             현황판
@@ -247,7 +242,7 @@ export default function AdminPage() {
               <p className="text-xs text-slate-400 font-medium text-center pt-8">활성화된 모임이 없습니다.</p>
             ) : (
               activeAndFinalizedSurveys.map((survey) => (
-                <button key={survey.id} onClick={() => { setSelectedSurvey(survey); setIsFinalizing(false); }} className={`w-full text-left p-3.5 rounded-xl border transition-all active:scale-[0.985] ${selectedSurvey?.id === survey.id ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100/70"}`}>
+                <button key={survey.id} onClick={() => { setSelectedSurvey(survey); setIsFinalizing(false); }} className={`w-full text-left p-3.5 rounded-xl border transition-all active:scale-[0.985] ${selectedSurvey?.id === survey.id ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100" : "bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100/70"}`}>
                   <div className="font-bold text-base mb-1.5 leading-snug">{survey.title}</div>
                   <div className="flex gap-1.5 text-[10px] font-extrabold">
                     <span className={`px-1.5 py-0.5 rounded ${selectedSurvey?.id === survey.id ? 'bg-blue-500 text-white' : (survey.status === 'active' ? 'bg-blue-50 text-blue-600 border' : 'bg-emerald-50 text-emerald-600 border')}`}>
@@ -285,7 +280,7 @@ export default function AdminPage() {
             <div className="border-b border-slate-100 pb-4 flex justify-between items-end">
               <div>
                 <h2 className="text-xl font-black text-slate-900">👥 등록된 선교인원 명단 ({registeredUsers.length}명)</h2>
-                <p className="text-xs text-slate-400 mt-1 font-medium">비밀번호를 생성하여 가입을 완료한 총 인원 목록입니다.</p>
+                <p className="text-xs text-slate-400 mt-1 font-medium">비밀번호를 생성하여 가입을 완료한 인원 목록입니다.</p>
               </div>
               
               <div className="w-52 text-right">
@@ -424,7 +419,6 @@ export default function AdminPage() {
                   <button onClick={() => handleShareToKakao(selectedSurvey)} className="bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-black text-xs py-2 px-3 rounded-xl shadow-sm transition-all active:scale-95">
                     💬 카톡 문구 복사
                   </button>
-                  {/* 📥 보관 처리 유닛 액션 링크 제공 */}
                   {selectedSurvey.status !== "archived" && (
                     <button onClick={() => handleArchiveSurvey(selectedSurvey.id)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-2 px-3 rounded-xl font-bold border active:scale-95">
                       📥 숨김 보관
@@ -457,19 +451,58 @@ export default function AdminPage() {
                     </button>
                   )}
 
-                  <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100/70">
-                    <h3 className="text-sm font-black text-blue-900 mb-4 uppercase tracking-wider">📊 실시간 시간대 득표 현황</h3>
-                    {sortedSlots.length === 0 ? <p className="text-xs text-slate-400 font-medium py-2">아직 참여한 단원이 없습니다.</p> : (
-                      <div className="grid gap-3">
-                        {sortedSlots.map(([slot, count]) => {
-                          {/* 📊 디자인 패치 6: 시각적 게이지 바(Progress Bar) 계산 적용 */}
-                          const widthPercent = Math.max(5, Math.min(100, (count / maxVotes) * 100));
+                  {/* 📊 [업데이트 반영!] 날짜별/득표순 정렬 및 최적 시간대 시각화 보드 */}
+                  <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100/70">
+                    <h3 className="text-sm font-black text-blue-900 mb-4 uppercase tracking-wider">
+                      📊 날짜별 투표 현황 및 최적 시간대 분석
+                    </h3>
+                    {currentVoteResponses.length === 0 ? (
+                      <p className="text-xs text-slate-400 font-medium py-2">아직 참여한 단원이 없습니다.</p>
+                    ) : (
+                      <div className="space-y-6">
+                        {selectedSurvey.dates.map((day: any) => {
+                          const daySlots = sortedSlots.filter(([slot]) => slot.startsWith(day.date));
+                          const dayMaxVotes = daySlots.length > 0 ? daySlots[0][1] : 0;
+
                           return (
-                            <div key={slot} className="relative overflow-hidden bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-sm flex justify-between items-center text-xs font-bold z-10">
-                              {/* 게이지 바 레이어 */}
-                              <div className="absolute left-0 top-0 bottom-0 bg-blue-500/10 z-0 transition-all duration-500" style={{ width: `${widthPercent}%` }}></div>
-                              <span className="text-slate-800 relative z-10">📅 {slot}</span>
-                              <span className="text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md font-black border border-blue-100 relative z-10">{count}명 득표</span>
+                            <div key={day.date} className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                              <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                                <span className="text-sm font-black text-slate-900">📅 {day.date}</span>
+                                <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded">
+                                  이 날 참여: {Array.from(new Set(currentVoteResponses.filter(r => r.slots.some((s: string) => s.startsWith(day.date))).map(r => r.name))).length}명
+                                </span>
+                              </div>
+
+                              <div className="space-y-2">
+                                {daySlots.length === 0 ? (
+                                  <p className="text-[11px] text-slate-400 italic py-1 pl-1">이 날짜에는 투표한 인원이 없습니다.</p>
+                                ) : (
+                                  daySlots.map(([slot, count]) => {
+                                    const timeText = slot.replace(`${day.date} (`, "").replace(")", "");
+                                    const isBest = count === dayMaxVotes && count > 0;
+                                    const widthPercent = Math.max(5, Math.min(100, (count / maxVotes) * 100));
+
+                                    return (
+                                      <div key={slot} className="relative overflow-hidden bg-slate-50/50 p-3 rounded-xl border border-slate-200/60 flex justify-between items-center text-xs font-bold z-10">
+                                        <div className="absolute left-0 top-0 bottom-0 bg-blue-500/5 z-0 transition-all duration-500" style={{ width: `${widthPercent}%` }}></div>
+                                        
+                                        <div className="flex items-center gap-2 relative z-10">
+                                          <span className="text-slate-800">{timeText}</span>
+                                          {isBest && (
+                                            <span className="text-[10px] bg-amber-100 text-amber-700 font-black px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-0.5 animate-pulse">
+                                              ⭐ 최적
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <span className={`px-2.5 py-1 rounded-md text-[11px] font-black relative z-10 ${isBest ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 border'}`}>
+                                          {count}명 선택
+                                        </span>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
                             </div>
                           );
                         })}
@@ -553,7 +586,7 @@ export default function AdminPage() {
                       </div>
                       {absent.length === 0 ? <p className="text-xs text-slate-400 font-medium pl-0.5">확정된 인원이 없습니다.</p> : (
                         <div className="grid gap-2">
-                          {partial.map((r, i) => (
+                          {absent.map((r, i) => (
                             <div key={i} className="bg-rose-50/40 border border-rose-200/60 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-sm text-xs font-bold">
                               <span className="text-slate-800 min-w-[130px]">{r.generation}기 {r.name} ({r.team})</span>
                               <span className="text-rose-600 bg-white border border-rose-100 px-3 py-1.5 rounded-lg flex-1 font-medium">🚨 사유: {r.reason}</span>

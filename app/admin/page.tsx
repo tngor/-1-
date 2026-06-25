@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<"status" | "users" | "create">("status");
+  // 📂 디자인 패치 3: 'archived'(보관함) 탭 신설하여 총 4개 분할 내비게이션
+  const [activeTab, setActiveTab] = useState<"status" | "users" | "create" | "archived">("status");
   
   const [surveys, setSurveys] = useState<any[]>([]);
   const [surveyResponses, setSurveyResponses] = useState<any[]>([]);
@@ -12,7 +13,6 @@ export default function AdminPage() {
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]); 
   const [selectedSurvey, setSelectedSurvey] = useState<any>(null);
 
-  // 미응답자 필터링용 타겟 모임 선택 상태
   const [targetFilterSurveyId, setTargetFilterSurveyId] = useState("");
 
   // 새 투표 생성용 상태
@@ -104,7 +104,7 @@ export default function AdminPage() {
     const { error } = await supabase.from("surveys").insert([newSurveyData]);
     if (error) return alert("생성 실패: " + error.message);
     
-    alert("📢 새로운 투표가 생성되었습니다! [현황판]에서 카톡 알림 텍스트를 복사해 보세요!");
+    alert("📢 새로운 투표가 생성되었습니다! 단원 단톡방에 링크를 공유하세요!");
     setNewTitle(""); setNewDates([]); setStartTime(""); setEndTime("");
     setActiveTab("status");
     fetchData(); 
@@ -123,11 +123,21 @@ export default function AdminPage() {
     setSelectedSurvey({ ...selectedSurvey, status: "finalized", final_schedule: finalSchedule }); 
   };
 
+  // 📂 디자인 패치 4: 일정을 완전 삭제하는 대신 'archived'(보관됨) 상태로 안전하게 숨기는 기능
+  const handleArchiveSurvey = async (id: string) => {
+    if (!window.confirm("이 일정을 조원 화면에서 숨기고 과거 보관함으로 이동하시겠습니까?")) return;
+    const { error } = await supabase.from("surveys").update({ status: "archived" }).eq("id", id);
+    if (error) return alert("보관 이동 실패: " + error.message);
+    alert("과거 보관함 탭으로 안전하게 이동되었습니다. 조원 화면에서는 숨김 처리됩니다.");
+    setSelectedSurvey(null);
+    fetchData();
+  };
+
   const handleDeleteSurvey = async (id: string) => {
-    if (!window.confirm("정말 이 일정을 삭제하시겠습니까? (관련된 데이터 모두 삭제됨)")) return;
+    if (!window.confirm("정말 이 일정을 데이터베이스에서 완전 영구 삭제하시겠습니까? (복구 불가능)")) return;
     const { error } = await supabase.from("surveys").delete().eq("id", id);
     if (error) return alert("삭제 실패: " + error.message);
-    alert("삭제되었습니다.");
+    alert("영구 삭제되었습니다.");
     setSelectedSurvey(null);
     fetchData();
   };
@@ -159,7 +169,6 @@ export default function AdminPage() {
     document.body.removeChild(link);
   };
 
-  // 🛠️ 강력추천 1: 카카오톡방 공유 포맷 텍스트 복사기 구현
   const handleShareToKakao = (survey: any) => {
     let shareText = "";
     if (survey.status === "active") {
@@ -169,9 +178,9 @@ export default function AdminPage() {
     }
 
     navigator.clipboard.writeText(shareText).then(() => {
-      alert("📋 카카오톡 단톡방 공지용 텍스트가 클립보드에 복사되었습니다! 카톡방에 바로 붙여넣기(Ctrl+V) 하세요!");
+      alert("📋 카카오톡 단톡방 공지용 텍스트가 클립보드에 복사되었습니다! 단톡방에 붙여넣기(Ctrl+V) 하세요!");
     }).catch(() => {
-      alert("복사에 실패했습니다. 브라우저 권한을 확인해 주세요.");
+      alert("복사에 실패했습니다.");
     });
   };
 
@@ -184,40 +193,27 @@ export default function AdminPage() {
   });
   const sortedSlots = Object.entries(slotCounts).sort((a, b) => b[1] - a[1]);
 
+  // 📊 디자인 패치 5: 시각적 게이지 바를 그리기 위해 최대 득표수 파악
+  const maxVotes = sortedSlots.length > 0 ? sortedSlots[0][1] : 1;
+
   const attending = currentRsvpResponses.filter((r) => r.status === "참석");
   const partial = currentRsvpResponses.filter((r) => r.status === "부분참석");
   const absent = currentRsvpResponses.filter((r) => r.status === "불참");
 
-  // 🛠️ 강력추천 2: 가입인원 대조 미응답자(미투표/미참석체크) 정밀 추출 로직
-  const getUnresponsiveUsers = () => {
-    if (!targetFilterSurveyId) return [];
+  const unresponsiveUsers = registeredUsers.filter(user => {
+    if (!targetFilterSurveyId) return false;
     const targetSurvey = surveys.find(s => s.id === targetFilterSurveyId);
-    if (!targetSurvey) return [];
-
-    // 모임 성격에 따라 대상 단원 1차 필터 (조별모임인 경우 해당 조 단원만 대조)
-    let targetGroupUsers = registeredUsers;
-    if (targetSurvey.meeting_type === "조별모임" && targetSurvey.target_team !== "전체") {
-      // 투표 제출 기록이나 RSVP 제출기록의 team을 매칭하여 가입한 조 정보 추적
-      targetGroupUsers = registeredUsers.filter(u => {
-        const hasVote = surveyResponses.some(r => r.survey_id === targetSurvey.id && r.name === u.name && r.generation === u.generation);
-        const hasRsvp = rsvpResponses.some(r => r.survey_id === targetSurvey.id && r.name === u.name && r.generation === u.generation);
-        // 임시로 유저의 소속조 판정 (아직 조 필터 변경 로직 적용 전이므로 투표데이터 이력 기준 추적 혹은 전체 체크)
-        return true; 
-      });
+    if (!targetSurvey) return false;
+    if (targetSurvey.status === "active") {
+      return !surveyResponses.some(r => r.survey_id === targetSurvey.id && r.name === user.name && r.generation === user.generation);
+    } else {
+      return !rsvpResponses.some(r => r.survey_id === targetSurvey.id && r.name === user.name && r.generation === user.generation);
     }
+  });
 
-    return registeredUsers.filter(user => {
-      if (targetSurvey.status === "active") {
-        // 투표 중인 경우: survey_responses에 이름이 없는 사람
-        return !surveyResponses.some(r => r.survey_id === targetSurvey.id && r.name === user.name && r.generation === user.generation);
-      } else {
-        // 확정 공지인 경우: rsvp_responses에 이름이 없는 사람
-        return !rsvpResponses.some(r => r.survey_id === targetSurvey.id && r.name === user.name && r.generation === user.generation);
-      }
-    });
-  };
-
-  const unresponsiveUsers = getUnresponsiveUsers();
+  // 📂 내비게이션용 필터 구별 분기 목록
+  const activeAndFinalizedSurveys = surveys.filter(s => s.status === "active" || s.status === "finalized");
+  const archivedSurveys = surveys.filter(s => s.status === "archived");
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 p-6 flex gap-6 font-sans selection:bg-blue-100">
@@ -229,85 +225,89 @@ export default function AdminPage() {
           <h1 className="text-xl font-black text-slate-900 tracking-tight mt-1.5">📋 선교 조교 대시보드</h1>
         </div>
         
-        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-4 border border-slate-200/40">
-          <button onClick={() => { setActiveTab("status"); setSelectedSurvey(null); }} className={`flex-1 text-center py-2.5 text-xs font-black rounded-lg transition-all ${activeTab === "status" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+        {/* 네비게이션 탭 리디자인 (4분할) */}
+        <div className="grid grid-cols-4 gap-0.5 bg-slate-100 p-1 rounded-xl mb-4 border border-slate-200/40">
+          <button onClick={() => { setActiveTab("status"); setSelectedSurvey(null); }} className={`text-center py-2 text-[11px] font-black rounded-lg transition-all ${activeTab === "status" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
             현황판
           </button>
-          <button onClick={() => { setActiveTab("users"); setTargetFilterSurveyId(""); }} className={`flex-1 text-center py-2.5 text-xs font-black rounded-lg transition-all ${activeTab === "users" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
-            👥 조원 관리
+          <button onClick={() => { setActiveTab("users"); setTargetFilterSurveyId(""); }} className={`text-center py-2 text-[11px] font-black rounded-lg transition-all ${activeTab === "users" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+            👥 명단
           </button>
-          <button onClick={() => setActiveTab("create")} className={`flex-1 text-center py-2.5 text-xs font-black rounded-lg transition-all ${activeTab === "create" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
-            ➕ 모임 개설
+          <button onClick={() => setActiveTab("create")} className={`text-center py-2 text-[11px] font-black rounded-lg transition-all ${activeTab === "create" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+            ➕ 개설
+          </button>
+          <button onClick={() => { setActiveTab("archived"); setSelectedSurvey(null); }} className={`text-center py-2 text-[11px] font-black rounded-lg transition-all ${activeTab === "archived" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+            📂 보관함
           </button>
         </div>
 
         <div className="space-y-2.5 overflow-y-auto flex-1 pr-1.5">
           {activeTab === "status" && (
-            surveys.length === 0 ? (
-              <p className="text-xs text-slate-400 font-medium text-center pt-8">등록된 모임이 없습니다.</p>
+            activeAndFinalizedSurveys.length === 0 ? (
+              <p className="text-xs text-slate-400 font-medium text-center pt-8">활성화된 모임이 없습니다.</p>
             ) : (
-              surveys.map((survey) => (
-                <button key={survey.id} onClick={() => { setSelectedSurvey(survey); setIsFinalizing(false); }} className={`w-full text-left p-3.5 rounded-xl border transition-all active:scale-[0.985] ${selectedSurvey?.id === survey.id ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100" : "bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100/70"}`}>
+              activeAndFinalizedSurveys.map((survey) => (
+                <button key={survey.id} onClick={() => { setSelectedSurvey(survey); setIsFinalizing(false); }} className={`w-full text-left p-3.5 rounded-xl border transition-all active:scale-[0.985] ${selectedSurvey?.id === survey.id ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100/70"}`}>
                   <div className="font-bold text-base mb-1.5 leading-snug">{survey.title}</div>
                   <div className="flex gap-1.5 text-[10px] font-extrabold">
-                    <span className={`px-1.5 py-0.5 rounded ${selectedSurvey?.id === survey.id ? 'bg-blue-500 text-white border border-blue-400' : (survey.status === 'active' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100')}`}>
+                    <span className={`px-1.5 py-0.5 rounded ${selectedSurvey?.id === survey.id ? 'bg-blue-500 text-white' : (survey.status === 'active' ? 'bg-blue-50 text-blue-600 border' : 'bg-emerald-50 text-emerald-600 border')}`}>
                       {survey.status === "active" ? "투표중" : "확정됨"}
                     </span>
-                    <span className={`px-1.5 py-0.5 rounded border ${selectedSurvey?.id === survey.id ? 'bg-blue-500 text-white border border-blue-400' : 'bg-purple-50 text-purple-600 border-purple-100'}`}>
-                      {survey.meeting_type || "조별모임"}
-                    </span>
-                    <span className={`px-1.5 py-0.5 rounded border ${selectedSurvey?.id === survey.id ? 'bg-blue-500 text-white border border-blue-400' : 'bg-slate-200/60 text-slate-600 border-slate-300/40'}`}>
-                      {survey.target_team}
-                    </span>
+                    <span className="bg-purple-50 text-purple-600 border px-1.5 py-0.5 rounded">{survey.meeting_type || "조별모임"}</span>
                   </div>
                 </button>
               ))
             )
           )}
-          {activeTab === "users" && <p className="text-xs text-slate-400 font-bold text-center pt-6">우측에서 가입 현황 및 미응답자 선별 가능</p>}
-          {activeTab === "create" && <p className="text-xs text-slate-400 font-bold text-center pt-6">우측에서 신규 양식 개설 가능</p>}
+          {activeTab === "archived" && (
+            archivedSurveys.length === 0 ? (
+              <p className="text-xs text-slate-400 font-medium text-center pt-8">보관 처리된 일정이 없습니다.</p>
+            ) : (
+              archivedSurveys.map((survey) => (
+                <button key={survey.id} onClick={() => { setSelectedSurvey(survey); setIsFinalizing(false); }} className={`w-full text-left p-3.5 rounded-xl border transition-all active:scale-[0.985] ${selectedSurvey?.id === survey.id ? "bg-slate-700 text-white border-slate-700 shadow-md" : "bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100/70"}`}>
+                  <div className="font-bold text-base mb-1.5 leading-snug text-slate-500">{survey.title}</div>
+                  <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-bold">📂 숨김 보관됨</span>
+                </button>
+              ))
+            )
+          )}
+          {activeTab === "users" && <p className="text-xs text-slate-400 font-bold text-center pt-6">우측에서 미응답 추적 확인 가능</p>}
+          {activeTab === "create" && <p className="text-xs text-slate-400 font-bold text-center pt-6">우측에서 신규 개설 가능</p>}
         </div>
       </div>
 
       {/* 🖥️ 오른쪽 메인 상세 콘텐츠 패널 */}
       <div className="w-2/3 bg-white p-7 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-200/60 overflow-y-auto h-[calc(100vh-3rem)]">
         
-        {/* 👥 탭 1: 조원 관리 (미응답자 선별 섹션 빌트인) */}
+        {/* 👥 탭 1: 명단 관리 탭 */}
         {activeTab === "users" && (
           <div className="animate-fade-in space-y-6">
             <div className="border-b border-slate-100 pb-4 flex justify-between items-end">
               <div>
-                {/* 🛠️ 수혁님 피드백 반영: '등록된 선교인원 명단'으로 문구 변경 */}
                 <h2 className="text-xl font-black text-slate-900">👥 등록된 선교인원 명단 ({registeredUsers.length}명)</h2>
-                <p className="text-xs text-slate-400 mt-1 font-medium">비밀번호를 생성하여 시스템 가입을 완료한 인원 목록입니다.</p>
+                <p className="text-xs text-slate-400 mt-1 font-medium">비밀번호를 생성하여 가입을 완료한 총 인원 목록입니다.</p>
               </div>
               
-              {/* 미응답자 실시간 트래커 필터 드롭다운 */}
               <div className="w-52 text-right">
                 <label className="block text-[10px] font-black text-red-500 uppercase mb-1">🚨 미응답자 선별 추적기</label>
                 <select value={targetFilterSurveyId} onChange={(e) => setTargetFilterSurveyId(e.target.value)} className="w-full border border-red-200 p-2 rounded-xl text-xs font-bold text-slate-900 bg-red-50/30 focus:outline-none cursor-pointer">
                   <option value="">모임을 선택해 보세요</option>
                   {surveys.map(s => (
-                    <option key={s.id} value={s.id}>{s.status === 'active' ? '[투표]' : '[공지]'} {s.title}</option>
+                    <option key={s.id} value={s.id}>{s.status === 'active' ? '[투표]' : s.status === 'archived' ? '[보관]' : '[공지]'} {s.title}</option>
                   ))}
                 </select>
               </div>
             </div>
 
-            {/* 🛠️ 미응답 추적 결과 디스플레이 영역 */}
             {targetFilterSurveyId && (
               <div className="bg-red-50/40 border border-red-100 p-4 rounded-2xl animate-fade-in">
-                <h3 className="text-xs font-black text-red-600 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  🎯 아직 참여안한 미응답자 목록 ({unresponsiveUsers.length}명)
-                </h3>
+                <h3 className="text-xs font-black text-red-600 uppercase tracking-wider mb-2">🎯 아직 참여안한 미응답자 목록 ({unresponsiveUsers.length}명)</h3>
                 {unresponsiveUsers.length === 0 ? (
                   <p className="text-xs text-slate-500 font-bold bg-white p-3 rounded-xl border border-slate-100 text-center">🎉 가입된 모든 단원이 응답을 마쳤습니다!</p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {unresponsiveUsers.map((u, i) => (
-                      <span key={i} className="bg-white border border-red-200 text-red-700 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm">
-                        ⚠️ {u.generation}기 {u.name}
-                      </span>
+                      <span key={i} className="bg-white border border-red-200 text-red-700 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm">⚠️ {u.generation}기 {u.name}</span>
                     ))}
                   </div>
                 )}
@@ -336,18 +336,18 @@ export default function AdminPage() {
               
               <div>
                 <label className="block text-xs font-black text-slate-500 mb-1.5 pl-0.5">모임 제목</label>
-                <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="예: 7월 2주차 선교 전체 기도회" className="w-full border border-slate-200 rounded-xl p-3 text-sm font-bold text-slate-900 bg-white focus:border-blue-500 focus:outline-none transition-all shadow-sm" />
+                <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="예: 7월 2주차 선교 전체 기도회" className="w-full border border-slate-200 rounded-xl p-3 text-sm font-bold text-slate-900 bg-white focus:outline-none shadow-sm" />
               </div>
 
               <div>
                 <label className="block text-xs font-black text-slate-500 mb-1.5 pl-0.5">모임 구분</label>
                 <div className="flex gap-4 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                   <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-slate-800">
-                    <input type="radio" checked={meetingType === "조별모임"} onChange={() => setMeetingType("조별모임")} className="accent-blue-600 scale-105" />
+                    <input type="radio" checked={meetingType === "조별모임"} onChange={() => setMeetingType("조별모임")} className="accent-blue-600" />
                     👥 조별 모임
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-slate-800">
-                    <input type="radio" checked={meetingType === "전체모임"} onChange={() => setMeetingType("전체모임")} className="accent-blue-600 scale-105" />
+                    <input type="radio" checked={meetingType === "전체모임"} onChange={() => setMeetingType("전체모임")} className="accent-blue-600" />
                     📢 전체 모임
                   </label>
                 </div>
@@ -356,7 +356,7 @@ export default function AdminPage() {
               {meetingType === "조별모임" && (
                 <div>
                   <label className="block text-xs font-black text-slate-500 mb-1.5 pl-0.5">대상 조 지정</label>
-                  <select value={newTeam} onChange={(e) => setNewTeam(e.target.value)} className="w-full border border-slate-200 rounded-xl p-3 text-sm font-bold text-slate-900 bg-white focus:border-blue-500 focus:outline-none transition-all shadow-sm">
+                  <select value={newTeam} onChange={(e) => setNewTeam(e.target.value)} className="w-full border border-slate-200 rounded-xl p-3 text-sm font-bold text-slate-900 bg-white focus:outline-none shadow-sm">
                     <option value="1조">1조</option>
                     <option value="2조">2조</option>
                     <option value="3조">3조</option>
@@ -370,7 +370,7 @@ export default function AdminPage() {
                 <label className="block text-xs font-black text-slate-500 mb-1.5 pl-0.5">투표 날짜 선택 (여러 개 가능)</label>
                 <div className="flex gap-2 mb-2.5">
                   <input type="date" value={tempDate} onChange={(e) => setTempDate(e.target.value)} className="flex-1 border border-slate-200 rounded-xl p-2.5 text-sm font-bold text-slate-900 bg-white focus:outline-none" />
-                  <button onClick={handleAddDate} className="bg-slate-900 hover:bg-slate-800 text-white font-black text-xs px-5 rounded-xl transition-all">추가</button>
+                  <button onClick={handleAddDate} className="bg-slate-900 text-white font-black text-xs px-5 rounded-xl transition-all">추가</button>
                 </div>
                 {newDates.length > 0 && (
                   <div className="flex flex-wrap gap-2 p-2 bg-blue-50/50 rounded-xl border border-blue-100 min-h-[2.5rem]">
@@ -395,18 +395,18 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <button onClick={handleCreateSurvey} className="w-full bg-blue-600 text-white font-black py-3.5 rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-100 text-base mt-2">
+              <button onClick={handleCreateSurvey} className="w-full bg-blue-600 text-white font-black py-3.5 rounded-xl hover:bg-blue-700 transition-all shadow-md text-base mt-2">
                 🚀 투표 공지 생성하기
               </button>
             </div>
           </div>
         )}
 
-        {/* 📊 탭 3: 메인 현황판 조회 모드 */}
-        {activeTab === "status" && (
+        {/* 📊 탭 3&4: 메인 현황판 및 보관함 상세 콘텐츠 조회 모드 */}
+        {(activeTab === "status" || activeTab === "archived") && (
           !selectedSurvey ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400">
-              <span className="text-5xl mb-3">📊</span>
+              <span className="text-5xl mb-3">{activeTab === 'archived' ? '📂' : '📊'}</span>
               <p className="font-bold text-sm">왼쪽 리스트에서 상세 조회할 선교 일정을 선택해 주세요.</p>
             </div>
           ) : (
@@ -420,13 +420,18 @@ export default function AdminPage() {
                   <h2 className="text-2xl font-black text-slate-900 leading-tight">{selectedSurvey.title}</h2>
                 </div>
                 
-                {/* 🛠️ 카톡 공유 버튼 우측 상단 실전 배치 */}
                 <div className="flex gap-2">
-                  <button onClick={() => handleShareToKakao(selectedSurvey)} className="bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-black text-xs py-2 px-3 rounded-xl shadow-sm transition-all flex items-center gap-1 active:scale-95">
-                    💬 카톡방 공유 텍스트 복사
+                  <button onClick={() => handleShareToKakao(selectedSurvey)} className="bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-black text-xs py-2 px-3 rounded-xl shadow-sm transition-all active:scale-95">
+                    💬 카톡 문구 복사
                   </button>
-                  <button onClick={() => handleDeleteSurvey(selectedSurvey.id)} className="text-red-500 font-extrabold hover:bg-red-50 px-2.5 py-1.5 rounded-xl transition-all text-xs">
-                    🗑️ 삭제
+                  {/* 📥 보관 처리 유닛 액션 링크 제공 */}
+                  {selectedSurvey.status !== "archived" && (
+                    <button onClick={() => handleArchiveSurvey(selectedSurvey.id)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-2 px-3 rounded-xl font-bold border active:scale-95">
+                      📥 숨김 보관
+                    </button>
+                  )}
+                  <button onClick={() => handleDeleteSurvey(selectedSurvey.id)} className="text-red-500 font-extrabold hover:bg-red-50 px-2.5 py-1.5 rounded-xl text-xs">
+                    🗑️ 데이터 영구삭제
                   </button>
                 </div>
               </div>
@@ -442,26 +447,32 @@ export default function AdminPage() {
                         <textarea value={finalMemo} onChange={(e) => setFinalMemo(e.target.value)} placeholder="지참물이나 전달 사항이 있다면 자유롭게 입력해 주세요." className="w-full border border-amber-200 rounded-xl p-3 h-24 text-sm font-medium text-slate-900 bg-white focus:outline-none" />
                         <div className="flex gap-2 pt-1">
                           <button onClick={() => setIsFinalizing(false)} className="flex-1 bg-white text-slate-600 font-bold py-2.5 rounded-xl border text-xs">취소</button>
-                          <button onClick={handleFinalizeSurvey} className="flex-1 bg-amber-500 text-white font-black py-2.5 rounded-xl shadow hover:bg-amber-600 text-xs transition-all">공지로 전환하기</button>
+                          <button onClick={handleFinalizeSurvey} className="flex-1 bg-amber-500 text-white font-black py-2.5 rounded-xl shadow hover:bg-amber-600 text-xs">공지로 전환하기</button>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => setIsFinalizing(true)} className="w-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black py-3.5 rounded-xl shadow transition-all text-sm flex justify-center items-center gap-2">
+                    <button onClick={() => setIsFinalizing(true)} className="w-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black py-3.5 rounded-xl shadow text-sm flex justify-center items-center gap-2">
                       ✅ 투표 마감하고 최종 공지 확정하기
                     </button>
                   )}
 
                   <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100/70">
-                    <h3 className="text-sm font-black text-blue-900 mb-3 uppercase tracking-wider">📊 실시간 시간대 득표 현황 (득표순)</h3>
+                    <h3 className="text-sm font-black text-blue-900 mb-4 uppercase tracking-wider">📊 실시간 시간대 득표 현황</h3>
                     {sortedSlots.length === 0 ? <p className="text-xs text-slate-400 font-medium py-2">아직 참여한 단원이 없습니다.</p> : (
-                      <div className="grid gap-2">
-                        {sortedSlots.map(([slot, count]) => (
-                          <div key={slot} className="flex justify-between items-center bg-white p-3 rounded-xl border border-blue-100 shadow-sm text-xs font-bold">
-                            <span className="text-slate-800">{slot}</span>
-                            <span className="text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full font-black">{count}명 선택</span>
-                          </div>
-                        ))}
+                      <div className="grid gap-3">
+                        {sortedSlots.map(([slot, count]) => {
+                          {/* 📊 디자인 패치 6: 시각적 게이지 바(Progress Bar) 계산 적용 */}
+                          const widthPercent = Math.max(5, Math.min(100, (count / maxVotes) * 100));
+                          return (
+                            <div key={slot} className="relative overflow-hidden bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-sm flex justify-between items-center text-xs font-bold z-10">
+                              {/* 게이지 바 레이어 */}
+                              <div className="absolute left-0 top-0 bottom-0 bg-blue-500/10 z-0 transition-all duration-500" style={{ width: `${widthPercent}%` }}></div>
+                              <span className="text-slate-800 relative z-10">📅 {slot}</span>
+                              <span className="text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md font-black border border-blue-100 relative z-10">{count}명 득표</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -477,9 +488,7 @@ export default function AdminPage() {
                               <span className="text-[10px] text-slate-400 font-medium">{res.team} · {res.generation}기</span>
                             </div>
                             {res.memo ? (
-                              <div className="text-slate-800 text-xs bg-white border border-slate-100 p-3 rounded-xl whitespace-pre-wrap leading-relaxed shadow-inner font-semibold">
-                                💡 {res.memo}
-                              </div>
+                              <div className="text-slate-800 text-xs bg-white border border-slate-100 p-3 rounded-xl whitespace-pre-wrap leading-relaxed shadow-inner font-semibold">💡 {res.memo}</div>
                             ) : (
                               <div className="text-slate-400 text-[10px] italic py-1">전달 비고 의견 없음</div>
                             )}
@@ -491,18 +500,18 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {selectedSurvey.status === "finalized" && (
+              {(selectedSurvey.status === "finalized" || selectedSurvey.status === "archived") && (
                 <div className="space-y-6 animate-fade-in">
-                  <div className="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-200/60 shadow-inner space-y-2.5 text-sm">
-                    <h3 className="font-black text-emerald-900 text-base">📍 최종 공지 확정본 리포트</h3>
-                    <p className="text-slate-700"><strong>모임 시간:</strong> <span className="font-bold text-slate-900">{selectedSurvey.final_schedule?.time || "미정"}</span></p>
-                    <p className="text-slate-700"><strong>모임 장소:</strong> <span className="font-bold text-slate-900">{selectedSurvey.final_schedule?.location || "미정"}</span></p>
-                    <p className="text-slate-700"><strong>조교 전달사항:</strong> <span className="font-medium text-slate-800">{selectedSurvey.final_schedule?.memo || "없음"}</span></p>
+                  <div className={`p-5 rounded-2xl border shadow-inner space-y-2.5 text-sm ${selectedSurvey.status === 'archived' ? 'bg-slate-100 border-slate-300/80 text-slate-500' : 'bg-emerald-50/50 border-emerald-200/60 text-slate-700'}`}>
+                    <h3 className={`font-black text-base ${selectedSurvey.status === 'archived' ? 'text-slate-700' : 'text-emerald-900'}`}>📍 최종 공지 확정본 리포트 {selectedSurvey.status === 'archived' && '(보관함 이관완료)'}</h3>
+                    <p><strong>모임 시간:</strong> <span className="font-bold text-slate-900">{selectedSurvey.final_schedule?.time || "미정"}</span></p>
+                    <p><strong>모임 장소:</strong> <span className="font-bold text-slate-900">{selectedSurvey.final_schedule?.location || "미정"}</span></p>
+                    <p><strong>조교 전달사항:</strong> <span className="font-medium text-slate-800">{selectedSurvey.final_schedule?.memo || "없음"}</span></p>
                   </div>
 
                   <div className="flex justify-between items-center border-b border-slate-100 pb-2">
                     <h3 className="text-lg font-black text-slate-900">🙋‍♂️ 실시간 참석 명부</h3>
-                    <button onClick={handleDownloadCSV} className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-black py-2.5 px-4 rounded-xl flex items-center gap-1.5 shadow transition-all active:scale-95">
+                    <button onClick={handleDownloadCSV} className="bg-slate-900 text-white text-xs font-black py-2.5 px-4 rounded-xl flex items-center gap-1.5 shadow active:scale-95">
                       📥 회의록용 엑셀(CSV) 추출
                     </button>
                   </div>
@@ -544,7 +553,7 @@ export default function AdminPage() {
                       </div>
                       {absent.length === 0 ? <p className="text-xs text-slate-400 font-medium pl-0.5">확정된 인원이 없습니다.</p> : (
                         <div className="grid gap-2">
-                          {absent.map((r, i) => (
+                          {partial.map((r, i) => (
                             <div key={i} className="bg-rose-50/40 border border-rose-200/60 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-sm text-xs font-bold">
                               <span className="text-slate-800 min-w-[130px]">{r.generation}기 {r.name} ({r.team})</span>
                               <span className="text-rose-600 bg-white border border-rose-100 px-3 py-1.5 rounded-lg flex-1 font-medium">🚨 사유: {r.reason}</span>

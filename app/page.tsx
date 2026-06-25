@@ -23,26 +23,30 @@ export default function Home() {
   const [rsvpStatus, setRsvpStatus] = useState<"참석" | "부분참석" | "불참" | "">("");
   const [rsvpReason, setRsvpReason] = useState("");
 
-  useEffect(() => {
-    const initApp = async () => {
-      const { data } = await supabase.from("surveys").select("*");
-      const fetchedSurveys = data || [];
-      setAllSurveys(fetchedSurveys);
+  // 🗺️ 피지 선교 준비 수칙 토글 상태
+  const [showRules, setShowRules] = useState(false);
 
-      const savedUser = localStorage.getItem("missionUser");
-      if (savedUser) {
-        const parsed = JSON.parse(savedUser);
-        setGeneration(parsed.generation);
-        setName(parsed.name);
-        setEntered(true);
-        if (parsed.lastCategory) {
-          setSelectedCategory(parsed.lastCategory);
-          setupMySurveys(parsed.lastCategory, fetchedSurveys);
-        }
-      }
-    };
-    initApp();
+  useEffect(() => {
+    fetchSurveys();
   }, []);
+
+  const fetchSurveys = async () => {
+    const { data } = await supabase.from("surveys").select("*");
+    const fetchedSurveys = data || [];
+    setAllSurveys(fetchedSurveys);
+
+    const savedUser = localStorage.getItem("missionUser");
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      setGeneration(parsed.generation);
+      setName(parsed.name);
+      setEntered(true);
+      if (parsed.lastCategory) {
+        setSelectedCategory(parsed.lastCategory);
+        setupMySurveys(parsed.lastCategory, fetchedSurveys);
+      }
+    }
+  };
 
   const setupMySurveys = (category: string, surveys: any[]) => {
     if (!category) {
@@ -56,6 +60,8 @@ export default function Home() {
     } else {
       filtered = surveys.filter(s => (s.meeting_type === "조별모임" || !s.meeting_type) && s.target_team === category);
     }
+    
+    // 📂 디자인 패치: status가 'archived'(보관됨)인 것은 조원 화면 필터링에서 철저히 제외
     setActiveSurveys(filtered.filter((s) => s.status === "active"));
     setFinalizedSurveys(filtered.filter((s) => s.status === "finalized"));
   };
@@ -86,6 +92,7 @@ export default function Home() {
 
     localStorage.setItem("missionUser", JSON.stringify({ generation, name, lastCategory: selectedCategory }));
     setEntered(true);
+    fetchSurveys();
   };
 
   const handleLogout = () => {
@@ -93,6 +100,7 @@ export default function Home() {
     setEntered(false);
     setPin("");
     setSelectedCategory("");
+    setShowRules(false);
   };
 
   const toggleSlot = (slot: string) => {
@@ -166,45 +174,50 @@ export default function Home() {
       <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
         
         {!entered ? (
-          <div className="py-4 animate-fade-in">
-            <div className="text-center mb-8">
-              {/* 🛠️ 수혁님 피드백 반영: 영어 표기 SYDC로 수정 */}
+          <div className="py-2 animate-fade-in">
+            <div className="text-center mb-6">
               <span className="text-xs bg-blue-50 text-blue-600 font-bold px-3 py-1 rounded-full uppercase tracking-wider">SYDC</span>
-              {/* 🛠️ 수혁님 피드백 반영: 청년 1부 피지 선교 준비로 문구 수정 */}
               <h1 className="mt-3 text-2xl font-black text-slate-900 tracking-tight">청년 1부 피지 선교 준비</h1>
-              <p className="text-sm text-slate-500 mt-1 font-medium">🗺️ 실시간 일정 및 공지 관리 시스템</p>
+              <p className="text-xs text-slate-400 mt-1 font-medium">🗺️ 실시간 일정 및 공지 관리 시스템</p>
+            </div>
+
+            {/* 💡 디자인 패치 1: 첫 화면 [초간단 3초 이용 가이드] */}
+            <div className="mb-5 bg-slate-50 border border-slate-200/60 p-4 rounded-2xl text-xs space-y-1.5 text-slate-600 shadow-inner">
+              <div className="font-extrabold text-slate-800 text-sm mb-1 flex items-center gap-1">💡 초간단 3초 이용 가이드</div>
+              <p>• <strong>처음 오셨나요?</strong> 본인의 기수와 이름을 입력하고, 원하는 비밀번호 4자리를 치면 즉시 계정이 생성되며 입장합니다.</p>
+              <p>• <strong>다시 오셨나요?</strong> 처음에 가입했던 비밀번호 4자리를 입력하면 즉시 로그인이 완료됩니다.</p>
             </div>
             
             <div className="space-y-4">
               <div className="flex gap-3">
                 <div className="w-1/3">
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 pl-1">기수</label>
-                  <input type="number" placeholder="45" value={generation} onChange={(e) => setGeneration(e.target.value)} className="w-full rounded-xl border border-slate-200 p-3.5 text-center text-lg font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />
+                  <label className="block text-xs font-bold text-slate-500 mb-1 pl-0.5">기수</label>
+                  <input type="number" placeholder="45" value={generation} onChange={(e) => setGeneration(e.target.value)} className="w-full rounded-xl border border-slate-200 p-3 text-center text-base font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all" />
                 </div>
                 <div className="w-2/3">
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 pl-1">이름</label>
-                  <input type="text" placeholder="홍길동" value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-xl border border-slate-200 p-3.5 text-lg font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />
+                  <label className="block text-xs font-bold text-slate-500 mb-1 pl-0.5">이름</label>
+                  <input type="text" placeholder="홍길동" value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-xl border border-slate-200 p-3 text-base font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all" />
                 </div>
               </div>
               
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5 pl-1">암호 설정</label>
-                <input type="password" maxLength={4} placeholder="••••" value={pin} onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))} className="w-full rounded-xl border border-slate-200 p-3.5 text-2xl tracking-[0.4em] text-center font-black text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />
-                <p className="text-xs text-slate-400 mt-2 pl-1 flex items-center gap-1">✨ 기억하기 쉽게 <strong className="text-blue-500 font-bold">생일 4자리</strong>를 권장합니다!</p>
+                <label className="block text-xs font-bold text-slate-500 mb-1 pl-0.5">비밀번호 (4자리)</label>
+                <input type="password" maxLength={4} placeholder="••••" value={pin} onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))} className="w-full rounded-xl border border-slate-200 p-3 text-xl tracking-[0.4em] text-center font-black text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all" />
+                <p className="text-[11px] text-slate-400 mt-1.5 pl-0.5">✨ 기억하기 쉽게 <strong>생일 4자리</strong> 설정을 권장합니다!</p>
               </div>
 
-              {/* 🛠️ 수혁님 피드백 반영: '입장하기'로 간소화 */}
-              <button onClick={handleEnter} className="mt-6 w-full rounded-xl bg-blue-600 p-4 text-base font-black text-white shadow-md shadow-blue-100 hover:bg-blue-700 active:scale-[0.99] transition-all">
+              <button onClick={handleEnter} className="mt-4 w-full rounded-xl bg-blue-600 p-3.5 text-base font-black text-white shadow-md shadow-blue-100 hover:bg-blue-700 active:scale-[0.99] transition-all">
                 입장하기 →
               </button>
             </div>
           </div>
         ) : (
           <div className="animate-fade-in">
-            <div className="mb-6 flex justify-between items-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
+            {/* 상단 프로필 헤더 바 */}
+            <div className="mb-5 flex justify-between items-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
               <div className="flex items-center gap-2 pl-1">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-sm font-black text-slate-800">{generation}기 <strong className="text-blue-600">{name}</strong> 단원</span>
+                <span className="text-sm font-black text-slate-800">{generation}기 <strong className="text-blue-600">{name}</strong></span>
               </div>
               <div className="flex items-center gap-3">
                 {viewMode !== "list" && (
@@ -218,8 +231,32 @@ export default function Home() {
               </div>
             </div>
 
+            {/* 🗺️ 피지 선교 준비 수칙 토글 보드 */}
+{viewMode === "list" && (
+  <div className="mb-4">
+    <button onClick={() => setShowRules(!showRules)} className="w-full bg-slate-900 text-white p-3 rounded-xl font-bold text-xs flex justify-between items-center shadow transition-all active:scale-[0.99]">
+      <span className="flex items-center gap-1.5">📜 피지 선교 준비 수칙 보기</span>
+      <span className="text-slate-400 transition-transform duration-200" style={{ transform: showRules ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+    </button>
+    {showRules && (
+      <div className="mt-2 bg-amber-50/60 border border-amber-200/70 p-4 rounded-xl text-xs text-slate-700 space-y-2.5 animate-fade-in leading-relaxed font-semibold shadow-inner">
+        <div className="text-slate-900 font-black border-b border-amber-200 pb-1.5 mb-1.5 text-sm flex items-center gap-1">🙌 우리들의 약속 (선교 수칙)</div>
+        <p className="flex items-start gap-1"><span className="text-red-500">🚫</span> <span><strong>연애 금지:</strong> 선교가 완전히 끝날 때까지 팀원 내 연애는 절대 금지합니다.</span></p>
+        <p className="flex items-start gap-1"><span className="text-amber-600">⏰</span> <span><strong>사전 연락:</strong> 불참하거나 늦게 참석할 경우, 최소 모임 3일 전에는 45기 강수혁에게 미리 전달해야 합니다.</span></p>
+        <p className="flex items-start gap-1"><span className="text-blue-600">🏃‍♂️</span> <span><strong>코리안 타임 금지:</strong> 모든 모임은 늘 시작 5분 전에 도착해 기도로 준비합니다.</span></p>
+        <p className="flex items-start gap-1"><span className="text-emerald-600">✅</span> <span><strong>공지 체크:</strong> 단톡방의 모든 카톡 공지는 확인 후 반드시 '체크 표시' 리액션을 남깁니다.</span></p>
+        <p className="flex items-start gap-1"><span className="text-purple-600">🧹</span> <span><strong>함께 동역:</strong> 모임이 끝난 후 장소 뒷정리와 청소는 다 같이 함께 합니다.</span></p>
+        <p className="flex items-start gap-1"><span className="text-indigo-600">📂</span> <span><strong>기록 보존:</strong> 팀별 회의가 끝난 후에는 구글 드라이브에 회의록을 꼭 작성합니다.</span></p>
+        <p className="flex items-start gap-1"><span className="text-rose-500">🙏</span> <span><strong>순종의 마음:</strong> 세워진 리더십을 온전히 존중하고 순종하는 마음으로 임합니다.</span></p>
+      </div>
+    )}
+  </div>
+)}
+
+            {/* 📋 리스트 메인 뷰 */}
             {viewMode === "list" && (
-              <div className="space-y-6">
+              <div className="space-y-5">
+                {/* 드롭다운 카테고리 카드 */}
                 <div className="bg-gradient-to-b from-blue-50/70 to-blue-50/20 p-4 rounded-2xl border border-blue-100">
                   <label className="block text-xs font-black text-blue-700 uppercase tracking-wider mb-2 pl-0.5">🎯 모임 섹션 필터</label>
                   <select value={selectedCategory} onChange={handleCategoryChange} className="w-full rounded-xl border border-blue-200 p-3 text-base font-bold text-slate-900 bg-white shadow-sm focus:border-blue-500 focus:outline-none transition-all cursor-pointer">
@@ -239,15 +276,17 @@ export default function Home() {
                     <p className="text-slate-400 text-sm font-bold mt-2">상단에서 보고 싶은 조나 전체모임을 고르시면<br/>해당하는 일정이 나타납니다.</p>
                   </div>
                 ) : (
-                  <div className="space-y-6 animate-fade-in">
+                  <div className="space-y-5 animate-fade-in">
+                    
+                    {/* 🗳️ 진행 중인 시간 투표 섹션 */}
                     <div>
-                      <h3 className="mb-3 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">
+                      <h3 className="mb-2 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">
                         {selectedCategory === "전체모임" ? "⏳ 진행 중인 전체 투표" : `⏳ 진행 중인 조별 투표 (${selectedCategory})`}
                       </h3>
                       {activeSurveys.length === 0 ? (
                         <p className="text-xs text-slate-400 bg-slate-50 p-4 rounded-xl text-center border border-dashed font-medium">현재 활성화된 투표가 없습니다.</p>
                       ) : (
-                        <div className="space-y-2.5">
+                        <div className="space-y-2">
                           {activeSurveys.map((survey) => (
                             <button key={survey.id} onClick={() => { setCurrentSurvey(survey); setViewMode("vote"); setVoteMemo(""); }} className="w-full text-left p-4 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-400 transition-all active:scale-[0.99] flex justify-between items-center group">
                               <div className="flex flex-col gap-1.5">
@@ -263,14 +302,15 @@ export default function Home() {
                       )}
                     </div>
 
+                    {/* 📢 확정된 공지 섹션 */}
                     <div>
-                      <h3 className="mb-3 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">
+                      <h3 className="mb-2 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">
                         {selectedCategory === "전체모임" ? "📢 확정된 전체 공지" : `📢 확정된 조별 공지 (${selectedCategory})`}
                       </h3>
                       {finalizedSurveys.length === 0 ? (
                         <p className="text-xs text-slate-400 bg-slate-50 p-4 rounded-xl text-center border border-dashed font-medium">확정 배포된 공지가 없습니다.</p>
                       ) : (
-                        <div className="space-y-2.5">
+                        <div className="space-y-2">
                           {finalizedSurveys.map((survey) => (
                             <button key={survey.id} onClick={() => openNotice(survey)} className="w-full text-left p-4 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-emerald-400 transition-all active:scale-[0.99] flex justify-between items-center group">
                               <div className="flex flex-col gap-1.5">
@@ -285,11 +325,13 @@ export default function Home() {
                         </div>
                       )}
                     </div>
+
                   </div>
                 )}
               </div>
             )}
 
+            {/* 🗳️ 시간대 투표 참여 UI 화면 */}
             {viewMode === "vote" && currentSurvey && (
               <div className="animate-fade-in space-y-5">
                 <div>
@@ -331,6 +373,7 @@ export default function Home() {
               </div>
             )}
 
+            {/* 📢 최종 확정 공지 및 RSVP 체크 UI 화면 */}
             {viewMode === "notice" && currentSurvey && (
               <div className="animate-fade-in space-y-6">
                 <div className="space-y-2">

@@ -1,4 +1,4 @@
-  "use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
@@ -14,7 +14,6 @@ export default function AdminPage() {
 
   const [targetFilterSurveyId, setTargetFilterSurveyId] = useState("");
 
-  // 새 투표 생성용 상태
   const [newTitle, setNewTitle] = useState("");
   const [meetingType, setMeetingType] = useState<"전체모임" | "조별모임">("조별모임");
   const [newTeam, setNewTeam] = useState("1조");
@@ -23,7 +22,6 @@ export default function AdminPage() {
   const [startTime, setStartTime] = useState(""); 
   const [endTime, setEndTime] = useState(""); 
 
-  // 마감(확정) 처리용 상태
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [finalTime, setFinalTime] = useState("");
   const [finalLocation, setFinalLocation] = useState("");
@@ -84,9 +82,13 @@ export default function AdminPage() {
     if (slotsArray.length === 0) return alert("종료 시간이 시작 시간보다 늦어야 합니다.");
 
     const datesPayload = newDates.map((dateStr) => {
-      const dateObj = new Date(dateStr);
+      const [yyyy, mm, dd] = dateStr.split("-").map(Number);
+      const dateObj = new Date(yyyy, mm - 1, dd);
+      const days = ['일', '월', '화', '수', '목', '금', '토'];
+      const dayName = days[dateObj.getDay()];
+      
       return {
-        date: `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일`,
+        date: `${mm}월 ${dd}일 (${dayName})`,
         slots: slotsArray,
       };
     });
@@ -110,7 +112,7 @@ export default function AdminPage() {
   };
 
   const handleFinalizeSurvey = async () => {
-    if (!finalTime || !finalLocation) return alert("확정된 시간과 장소를 입력해주세요.");
+    if (!finalTime || !finalLocation) return alert("확정된 시간 and 장소를 입력해주세요.");
     const finalSchedule = { time: finalTime, location: finalLocation, memo: finalMemo };
     const { error } = await supabase.from("surveys").update({ status: "finalized", final_schedule: finalSchedule }).eq("id", selectedSurvey.id);
     if (error) return alert("확정 실패: " + error.message);
@@ -153,7 +155,7 @@ export default function AdminPage() {
     csvContent += `\n`; 
     
     csvContent += "구분,소속 조/구분,기수,이름,사유 및 비고란\n"; 
-    attending.forEach(r => csvContent += `참석 확정,${r.team},${r.generation}기,${r.name},\n`);
+    attending.forEach(r => csvContent += `참석 확정,${r.team},${r.generation}기,${r.name},${r.reason || ""}\n`);
     partial.forEach(r => csvContent += `부분 참석,${r.team},${r.generation}기,${r.name},${r.reason || ""}\n`);
     absent.forEach(r => csvContent += `불참 인원,${r.team},${r.generation}기,${r.name},${r.reason || ""}\n`);
 
@@ -167,12 +169,13 @@ export default function AdminPage() {
     document.body.removeChild(link);
   };
 
+  // 🛠️ 수혁님 피드백 완벽 반영: 카카오톡 공유 문구
   const handleShareToKakao = (survey: any) => {
     let shareText = "";
     if (survey.status === "active") {
-      shareText = `[📢 피지 선교 일정 시간 투표 오픈]\n\n조원 여러분, 새로운 선교 조율 투표가 등록되었습니다. 한 분도 빠짐없이 투표에 응답해 주세요!\n\n📌 모임명: ${survey.title}\n👥 대상: ${survey.meeting_type || "조별모임"} (${survey.target_team})\n\n🔗 지금 투표하기:\nhttps://1-weld-ten-38.vercel.app`;
+      shareText = `[📢 피지 선교 조별 모임 일정 여부 투표 오픈]\n\n선교 조별 모임 일정 투표가 등록되었습니다. 해당되시는 분들은 한 분도 빠짐없이 투표에 응답해 주세요!\n\n📌 모임명: ${survey.title}\n👥 대상: ${survey.meeting_type || "조별모임"} (${survey.target_team})\n\n🔗 지금 투표하기:\nhttps://1-weld-ten-38.vercel.app`;
     } else {
-      shareText = `[📍 피지 선교 모임 최종 확정 공지]\n\n선교 준비 일정 및 장소가 최종 조율되어 공지합니다. 아래 내용을 확인하시고 앱에서 꼭 참석체크(RSVP)를 진행해 주세요!\n\n📌 모임명: ${survey.title}\n⏱️ 최종 시간: ${survey.final_schedule?.time || "미정"}\n🏫 최종 장소: ${survey.final_schedule?.location || "미정"}\n📝 조교 공지사항: ${survey.final_schedule?.memo || "없음"}\n\n🔗 참석 여부 제출하러 가기:\nhttps://1-weld-ten-38.vercel.app`;
+      shareText = `[📍 피지 선교 조별 모임 최종 확정 공지]\n\n선교 조별 모임 일정 및 장소가 최종 조율되어 공지합니다. 아래 내용을 확인하시고 앱에서 꼭 식사 여부 및 참석체크를 진행해 주세요! \n\n부분참석의 경우는 사유와 시간도 같이 기재해주세요.\n\n📌 모임명: ${survey.title}\n⏱️ 최종 날짜 및 시간: ${survey.final_schedule?.time || "미정"}\n🏫 최종 장소: ${survey.final_schedule?.location || "미정"}\n📝 조교 공지사항: ${survey.final_schedule?.memo || "없음"}\n\n🔗 참석 여부 제출하러 가기:\nhttps://1-weld-ten-38.vercel.app`;
     }
 
     navigator.clipboard.writeText(shareText).then(() => {
@@ -211,10 +214,34 @@ export default function AdminPage() {
   const activeAndFinalizedSurveys = surveys.filter(s => s.status === "active" || s.status === "finalized");
   const archivedSurveys = surveys.filter(s => s.status === "archived");
 
+  const renderVoteMemos = () => {
+    const validVoteMemos = currentVoteResponses.filter((res) => res.memo && res.memo.trim() !== "");
+
+    return (
+      <div className="space-y-3 pt-4 border-t border-slate-100 mt-4">
+        <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider pl-0.5">📝 조원 초기 투표 비고란 기록 (의견 제출자만 노출)</h3>
+        {validVoteMemos.length === 0 ? (
+          <p className="text-xs text-slate-400 font-medium py-1">제출된 특별 비고 의견이 없습니다.</p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {validVoteMemos.map((res, idx) => (
+              <div key={idx} className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl shadow-sm flex flex-col justify-between">
+                <div className="font-bold text-slate-900 text-xs border-b border-slate-200/60 pb-2 mb-2 flex justify-between">
+                  <span>{res.name}</span>
+                  <span className="text-[10px] text-slate-400 font-medium">{res.team} · {res.generation}기</span>
+                </div>
+                <div className="text-slate-800 text-xs bg-white border border-slate-100 p-3 rounded-xl whitespace-pre-wrap leading-relaxed shadow-inner font-semibold">💡 {res.memo}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 p-6 flex gap-6 font-sans selection:bg-blue-100">
       
-      {/* 🧭 왼쪽 통합 내비게이션 사이드바 */}
       <div className="w-1/3 bg-white p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-200/60 flex flex-col h-[calc(100vh-3rem)]">
         <div className="mb-5 pl-1">
           <span className="text-[10px] bg-blue-50 text-blue-600 font-extrabold px-2.5 py-1 rounded-md uppercase tracking-wider">Admin Control</span>
@@ -242,7 +269,7 @@ export default function AdminPage() {
               <p className="text-xs text-slate-400 font-medium text-center pt-8">활성화된 모임이 없습니다.</p>
             ) : (
               activeAndFinalizedSurveys.map((survey) => (
-                <button key={survey.id} onClick={() => { setSelectedSurvey(survey); setIsFinalizing(false); }} className={`w-full text-left p-3.5 rounded-xl border transition-all active:scale-[0.985] ${selectedSurvey?.id === survey.id ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100" : "bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100/70"}`}>
+                <button key={survey.id} onClick={() => { setSelectedSurvey(survey); setIsFinalizing(false); }} className={`w-full text-left p-3.5 rounded-xl border transition-all active:scale-[0.985] ${selectedSurvey?.id === survey.id ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100/70"}`}>
                   <div className="font-bold text-base mb-1.5 leading-snug">{survey.title}</div>
                   <div className="flex gap-1.5 text-[10px] font-extrabold">
                     <span className={`px-1.5 py-0.5 rounded ${selectedSurvey?.id === survey.id ? 'bg-blue-500 text-white' : (survey.status === 'active' ? 'bg-blue-50 text-blue-600 border' : 'bg-emerald-50 text-emerald-600 border')}`}>
@@ -271,10 +298,8 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* 🖥️ 오른쪽 메인 상세 콘텐츠 패널 */}
       <div className="w-2/3 bg-white p-7 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-200/60 overflow-y-auto h-[calc(100vh-3rem)]">
         
-        {/* 👥 탭 1: 명단 관리 탭 */}
         {activeTab === "users" && (
           <div className="animate-fade-in space-y-6">
             <div className="border-b border-slate-100 pb-4 flex justify-between items-end">
@@ -312,7 +337,7 @@ export default function AdminPage() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {registeredUsers.map((user) => (
                 <div key={user.id} className="bg-slate-50 border border-slate-200/70 p-4 rounded-xl flex flex-col justify-center shadow-sm">
-                  <span className="text-[10px] font-black text-blue-600 mb-0.5">{user.generation}기 단원</span>
+                  <span className="text-[10px] font-black text-blue-600 mb-0.5">{user.generation}기</span>
                   <span className="text-base font-bold text-slate-900">{user.name}</span>
                 </div>
               ))}
@@ -320,7 +345,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ➕ 탭 2: 새로운 일정 만들기 탭 */}
         {activeTab === "create" && (
           <div className="animate-fade-in max-w-xl mx-auto space-y-5">
             <div className="border-b border-slate-100 pb-3">
@@ -397,7 +421,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* 📊 탭 3&4: 메인 현황판 및 보관함 상세 콘텐츠 조회 모드 */}
         {(activeTab === "status" || activeTab === "archived") && (
           !selectedSurvey ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400">
@@ -451,7 +474,6 @@ export default function AdminPage() {
                     </button>
                   )}
 
-                  {/* 📊 [업데이트 반영!] 날짜별/득표순 정렬 및 최적 시간대 시각화 보드 */}
                   <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100/70">
                     <h3 className="text-sm font-black text-blue-900 mb-4 uppercase tracking-wider">
                       📊 날짜별 투표 현황 및 최적 시간대 분석
@@ -485,7 +507,6 @@ export default function AdminPage() {
                                     return (
                                       <div key={slot} className="relative overflow-hidden bg-slate-50/50 p-3 rounded-xl border border-slate-200/60 flex justify-between items-center text-xs font-bold z-10">
                                         <div className="absolute left-0 top-0 bottom-0 bg-blue-500/5 z-0 transition-all duration-500" style={{ width: `${widthPercent}%` }}></div>
-                                        
                                         <div className="flex items-center gap-2 relative z-10">
                                           <span className="text-slate-800">{timeText}</span>
                                           {isBest && (
@@ -494,7 +515,6 @@ export default function AdminPage() {
                                             </span>
                                           )}
                                         </div>
-
                                         <span className={`px-2.5 py-1 rounded-md text-[11px] font-black relative z-10 ${isBest ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 border'}`}>
                                           {count}명 선택
                                         </span>
@@ -510,26 +530,7 @@ export default function AdminPage() {
                     )}
                   </div>
 
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider pl-0.5">📝 조원 투표 비고란 모아보기</h3>
-                    {currentVoteResponses.length === 0 ? <p className="text-xs text-slate-400 font-medium py-1">제출된 코멘트가 없습니다.</p> : (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {currentVoteResponses.map((res, idx) => (
-                          <div key={idx} className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl shadow-sm flex flex-col justify-between">
-                            <div className="font-bold text-slate-900 text-xs border-b border-slate-200/60 pb-2 mb-2 flex justify-between">
-                              <span>{res.name}</span>
-                              <span className="text-[10px] text-slate-400 font-medium">{res.team} · {res.generation}기</span>
-                            </div>
-                            {res.memo ? (
-                              <div className="text-slate-800 text-xs bg-white border border-slate-100 p-3 rounded-xl whitespace-pre-wrap leading-relaxed shadow-inner font-semibold">💡 {res.memo}</div>
-                            ) : (
-                              <div className="text-slate-400 text-[10px] italic py-1">전달 비고 의견 없음</div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {renderVoteMemos()}
                 </div>
               )}
 
@@ -596,7 +597,8 @@ export default function AdminPage() {
                       )}
                     </div>
                   </div>
-
+                  
+                  {renderVoteMemos()}
                 </div>
               )}
             </div>

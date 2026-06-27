@@ -22,8 +22,8 @@ export default function Home() {
 
   const [rsvpStatus, setRsvpStatus] = useState<"참석" | "부분참석" | "불참" | "">("");
   const [rsvpReason, setRsvpReason] = useState("");
+  const [mealStatus, setMealStatus] = useState<"식사함" | "식사안함" | "">(""); 
 
-  // 🗺️ 피지 선교 준비 수칙 토글 상태
   const [showRules, setShowRules] = useState(false);
 
   useEffect(() => {
@@ -61,7 +61,6 @@ export default function Home() {
       filtered = surveys.filter(s => (s.meeting_type === "조별모임" || !s.meeting_type) && s.target_team === category);
     }
     
-    // 📂 디자인 패치: status가 'archived'(보관됨)인 것은 조원 화면 필터링에서 철저히 제외
     setActiveSurveys(filtered.filter((s) => s.status === "active"));
     setFinalizedSurveys(filtered.filter((s) => s.status === "finalized"));
   };
@@ -84,7 +83,7 @@ export default function Home() {
     if (existingUser) {
       if (existingUser.pin !== pin) return alert("비밀번호가 틀렸습니다! 다시 확인해주세요.");
     } else {
-      if (!window.confirm(`처음 오셨군요! [${generation}기 [${name}]님, 비밀번호 [${pin}](으)로 계정을 생성할까요?`)) return;
+      if (!window.confirm(`처음 오셨군요! [${generation}기] [${name}]님, 비밀번호 [${pin}](으)로 계정을 생성할까요?`)) return;
       const { error } = await supabase.from("users").insert([{ team: "미지정", generation, name, pin }]);
       if (error) return alert("계정 생성에 실패했습니다.");
       alert("계정이 성공적으로 만들어졌습니다!");
@@ -138,22 +137,39 @@ export default function Home() {
     setCurrentSurvey(survey);
     setRsvpStatus("");
     setRsvpReason("");
+    setMealStatus("");
     
     const { data } = await supabase.from("rsvp_responses").select("*").eq("survey_id", survey.id).eq("generation", generation).eq("name", name).maybeSingle();
     if (data) {
       setRsvpStatus(data.status as any);
-      setRsvpReason(data.reason || "");
+      if (data.reason?.startsWith("[식사함] ")) {
+        setMealStatus("식사함");
+        setRsvpReason(data.reason.replace("[식사함] ", ""));
+      } else if (data.reason?.startsWith("[식사안함] ")) {
+        setMealStatus("식사안함");
+        setRsvpReason(data.reason.replace("[식사안함] ", ""));
+      } else {
+        setRsvpReason(data.reason || "");
+      }
     }
     setViewMode("notice");
   };
 
   const handleSubmitRsvp = async () => {
     if (!rsvpStatus) return alert("참석 여부를 선택해주세요.");
+    if ((rsvpStatus === "참석" || rsvpStatus === "부분참석") && !mealStatus) {
+      return alert("식사 여부를 체크해주세요.");
+    }
     if ((rsvpStatus === "부분참석" || rsvpStatus === "불참") && !rsvpReason.trim()) {
-      return alert("사유를 작성해주세요.");
+      return alert("참석 가능 시간 또는 사유를 작성해주세요.");
     }
 
     await supabase.from("rsvp_responses").delete().eq("survey_id", currentSurvey.id).eq("generation", generation).eq("name", name);
+
+    let finalReasonToSave = rsvpReason.trim();
+    if (rsvpStatus !== "불참" && mealStatus) {
+      finalReasonToSave = `[${mealStatus}] ${finalReasonToSave}`;
+    }
 
     const { error } = await supabase.from("rsvp_responses").insert([{
       survey_id: currentSurvey.id,
@@ -161,7 +177,7 @@ export default function Home() {
       generation: generation,
       name: name,
       status: rsvpStatus,
-      reason: rsvpReason
+      reason: finalReasonToSave
     }]);
 
     if (error) return alert("저장에 실패했습니다.");
@@ -181,7 +197,6 @@ export default function Home() {
               <p className="text-xs text-slate-400 mt-1 font-medium">🗺️ 실시간 일정 및 공지 관리 시스템</p>
             </div>
 
-            {/* 💡 디자인 패치 1: 첫 화면 [초간단 3초 이용 가이드] */}
             <div className="mb-5 bg-slate-50 border border-slate-200/60 p-4 rounded-2xl text-xs space-y-1.5 text-slate-600 shadow-inner">
               <div className="font-extrabold text-slate-800 text-sm mb-1 flex items-center gap-1">💡 초간단 3초 이용 가이드</div>
               <p>• <strong>처음 오셨나요?</strong> 본인의 기수와 이름을 입력하고, 원하는 비밀번호 4자리를 치면 즉시 계정이 생성되며 입장합니다.</p>
@@ -213,7 +228,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="animate-fade-in">
-            {/* 상단 프로필 헤더 바 */}
+            {/* 🛠️ 수혁님 피드백 반영: 상단 프로필 헤더 '단원' 명칭 제거 */}
             <div className="mb-5 flex justify-between items-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
               <div className="flex items-center gap-2 pl-1">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -231,32 +246,29 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 🗺️ 피지 선교 준비 수칙 토글 보드 */}
-{viewMode === "list" && (
-  <div className="mb-4">
-    <button onClick={() => setShowRules(!showRules)} className="w-full bg-slate-900 text-white p-3 rounded-xl font-bold text-xs flex justify-between items-center shadow transition-all active:scale-[0.99]">
-      <span className="flex items-center gap-1.5">📜 피지 선교 준비 수칙 보기</span>
-      <span className="text-slate-400 transition-transform duration-200" style={{ transform: showRules ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
-    </button>
-    {showRules && (
-      <div className="mt-2 bg-amber-50/60 border border-amber-200/70 p-4 rounded-xl text-xs text-slate-700 space-y-2.5 animate-fade-in leading-relaxed font-semibold shadow-inner">
-        <div className="text-slate-900 font-black border-b border-amber-200 pb-1.5 mb-1.5 text-sm flex items-center gap-1">🙌 우리들의 약속 (선교 수칙)</div>
-        <p className="flex items-start gap-1"><span className="text-red-500">🚫</span> <span><strong>연애 금지:</strong> 선교가 완전히 끝날 때까지 팀원 내 연애는 절대 금지합니다.</span></p>
-        <p className="flex items-start gap-1"><span className="text-amber-600">⏰</span> <span><strong>사전 연락:</strong> 불참하거나 늦게 참석할 경우, 최소 모임 3일 전에는 45기 강수혁에게 미리 전달해야 합니다.</span></p>
-        <p className="flex items-start gap-1"><span className="text-blue-600">🏃‍♂️</span> <span><strong>코리안 타임 금지:</strong> 모든 모임은 늘 시작 5분 전에 도착해 기도로 준비합니다.</span></p>
-        <p className="flex items-start gap-1"><span className="text-emerald-600">✅</span> <span><strong>공지 체크:</strong> 단톡방의 모든 카톡 공지는 확인 후 반드시 '체크 표시' 리액션을 남깁니다.</span></p>
-        <p className="flex items-start gap-1"><span className="text-purple-600">🧹</span> <span><strong>함께 동역:</strong> 모임이 끝난 후 장소 뒷정리와 청소는 다 같이 함께 합니다.</span></p>
-        <p className="flex items-start gap-1"><span className="text-indigo-600">📂</span> <span><strong>기록 보존:</strong> 팀별 회의가 끝난 후에는 구글 드라이브에 회의록을 꼭 작성합니다.</span></p>
-        <p className="flex items-start gap-1"><span className="text-rose-500">🙏</span> <span><strong>순종의 마음:</strong> 세워진 리더십을 온전히 존중하고 순종하는 마음으로 임합니다.</span></p>
-      </div>
-    )}
-  </div>
-)}
+            {viewMode === "list" && (
+              <div className="mb-4">
+                <button onClick={() => setShowRules(!showRules)} className="w-full bg-slate-900 text-white p-3 rounded-xl font-bold text-xs flex justify-between items-center shadow transition-all active:scale-[0.99]">
+                  <span className="flex items-center gap-1.5">📜 피지 선교 준비 단원 수칙 보기</span>
+                  <span className="text-slate-400 transition-transform duration-200" style={{ transform: showRules ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+                </button>
+                {showRules && (
+                  <div className="mt-2 bg-amber-50/60 border border-amber-200/70 p-4 rounded-xl text-xs text-slate-700 space-y-2.5 animate-fade-in leading-relaxed font-semibold shadow-inner">
+                    <div className="text-slate-900 font-black border-b border-amber-200 pb-1.5 mb-1.5 text-sm flex items-center gap-1">🙌 우리들의 약속 (선교 수칙)</div>
+                    <p className="flex items-start gap-1"><span className="text-red-500">🚫</span> <span><strong>연애 금지:</strong> 선교가 완전히 끝날 때까지 팀원 내 연애는 절대 금지합니다.</span></p>
+                    <p className="flex items-start gap-1"><span className="text-amber-600">⏰</span> <span><strong>사전 연락:</strong> 불참하거나 늦게 참석할 경우, 최소 모임 3일 전에는 수혁에게 미리 전달해야 합니다.</span></p>
+                    <p className="flex items-start gap-1"><span className="text-blue-600">🏃‍♂️</span> <span><strong>코리안 타임 금지:</strong> 모든 모임은 늘 시작 5분 전에 도착해 기도로 준비합니다.</span></p>
+                    <p className="flex items-start gap-1"><span className="text-emerald-600">✅</span> <span><strong>공지 체크:</strong> 단톡방의 모든 카톡 공지는 확인 후 반드시 '체크 표시' 리액션을 남깁니다.</span></p>
+                    <p className="flex items-start gap-1"><span className="text-purple-600">🧹</span> <span><strong>함께 동역:</strong> 모임이 끝난 후 장소 뒷정리와 청소는 다 같이 함께 합니다.</span></p>
+                    <p className="flex items-start gap-1"><span className="text-indigo-600">📂</span> <span><strong>기록 보존:</strong> 팀별 회의가 끝난 후에는 구글 드라이브에 회의록을 꼭 작성합니다.</span></p>
+                    <p className="flex items-start gap-1"><span className="text-rose-500">🙏</span> <span><strong>순종의 마음:</strong> 세워진 리더십을 온전히 존중하고 순종하는 마음으로 임합니다.</span></p>
+                  </div>
+                )}
+              </div>
+            )}
 
-            {/* 📋 리스트 메인 뷰 */}
             {viewMode === "list" && (
               <div className="space-y-5">
-                {/* 드롭다운 카테고리 카드 */}
                 <div className="bg-gradient-to-b from-blue-50/70 to-blue-50/20 p-4 rounded-2xl border border-blue-100">
                   <label className="block text-xs font-black text-blue-700 uppercase tracking-wider mb-2 pl-0.5">🎯 모임 섹션 필터</label>
                   <select value={selectedCategory} onChange={handleCategoryChange} className="w-full rounded-xl border border-blue-200 p-3 text-base font-bold text-slate-900 bg-white shadow-sm focus:border-blue-500 focus:outline-none transition-all cursor-pointer">
@@ -277,8 +289,6 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="space-y-5 animate-fade-in">
-                    
-                    {/* 🗳️ 진행 중인 시간 투표 섹션 */}
                     <div>
                       <h3 className="mb-2 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">
                         {selectedCategory === "전체모임" ? "⏳ 진행 중인 전체 투표" : `⏳ 진행 중인 조별 투표 (${selectedCategory})`}
@@ -302,7 +312,6 @@ export default function Home() {
                       )}
                     </div>
 
-                    {/* 📢 확정된 공지 섹션 */}
                     <div>
                       <h3 className="mb-2 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">
                         {selectedCategory === "전체모임" ? "📢 확정된 전체 공지" : `📢 확정된 조별 공지 (${selectedCategory})`}
@@ -325,13 +334,12 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-
                   </div>
                 )}
               </div>
             )}
 
-            {/* 🗳️ 시간대 투표 참여 UI 화면 */}
+            {/* 🗳️ 첫 투표 화면 (날짜+요일 자동 표시 연동 완료) */}
             {viewMode === "vote" && currentSurvey && (
               <div className="animate-fade-in space-y-5">
                 <div>
@@ -345,6 +353,7 @@ export default function Home() {
                 <div className="space-y-4">
                   {currentSurvey.dates.map((day: any) => (
                     <div key={day.date} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      {/* 🛠️ 새로 만드는 일정의 경우 이곳에 날짜와 요일이 세트로 노출됩니다 */}
                       <h3 className="mb-2.5 text-sm font-extrabold text-slate-700 flex items-center gap-1.5">📅 {day.date}</h3>
                       <div className="grid gap-2">
                         {day.slots.map((slot: string) => {
@@ -364,7 +373,7 @@ export default function Home() {
                 
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-1.5 pl-0.5">📝 조교 비고 전달사항</label>
-                  <textarea value={voteMemo} onChange={(e) => setVoteMemo(e.target.value)} placeholder="지각 사유나 조퇴 시간 조율이 필요한 내용을 상세하게 적어주세요." className="w-full rounded-xl border border-slate-200 p-3 h-24 text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />
+                  <textarea value={voteMemo} onChange={(e) => setVoteMemo(e.target.value)} placeholder="개인적인 일정이나, 시간 조율이 필요한 경우 내용을 상세하게 적어주세요." className="w-full rounded-xl border border-slate-200 p-3 h-24 text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />
                 </div>
 
                 <button onClick={handleSubmitVote} className="w-full rounded-xl bg-blue-600 p-4 text-base font-black text-white shadow-md shadow-blue-100 hover:bg-blue-700 transition-all">
@@ -406,7 +415,7 @@ export default function Home() {
                 <div className="pt-2 border-t border-slate-100">
                   <h3 className="text-sm font-black text-slate-900 mb-3 pl-0.5">🙋‍♂️ 나의 참석 여부 제출</h3>
                   
-                  <div className="flex gap-2 mb-3">
+                  <div className="flex gap-2 mb-4">
                     <button onClick={() => setRsvpStatus("참석")} className={`flex-1 py-3 text-sm font-black rounded-xl transition-all shadow-sm active:scale-95 ${rsvpStatus === "참석" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>
                       참석
                     </button>
@@ -418,9 +427,25 @@ export default function Home() {
                     </button>
                   </div>
 
+                  {/* 🍽️ 식사 여부 선택 토글 */}
+                  {(rsvpStatus === "참석" || rsvpStatus === "부분참석") && (
+                    <div className="mb-4 animate-fade-in bg-orange-50/50 p-4 rounded-xl border border-orange-200/60 shadow-sm">
+                      <label className="block text-xs font-black text-orange-800 mb-2">🍽️ 모임 식사 여부</label>
+                      <div className="flex gap-2">
+                        <button onClick={() => setMealStatus("식사함")} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${mealStatus === "식사함" ? "bg-orange-500 text-white shadow-sm" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>
+                          🍚 밥 먹어요
+                        </button>
+                        <button onClick={() => setMealStatus("식사안함")} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${mealStatus === "식사안함" ? "bg-slate-700 text-white shadow-sm" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>
+                          🙅 안 먹어요
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 🛠️ 수혁님 피드백 반영: 부분참석 예시 알바 내용 및 지각/조퇴 시간 필수 기재 가이드 수정 */}
                   {(rsvpStatus === "부분참석" || rsvpStatus === "불참") && (
                     <div className="mb-4 animate-fade-in">
-                      <textarea value={rsvpReason} onChange={(e) => setRsvpReason(e.target.value)} placeholder={rsvpStatus === "부분참석" ? "예: 학원 수강으로 인해 30분 정도 지각합니다." : "조교 서류 기록을 위해 불참 사유를 구체적으로 작성해 주세요."} className="w-full rounded-xl border border-slate-200 p-3 h-24 text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />
+                      <textarea value={rsvpReason} onChange={(e) => setRsvpReason(e.target.value)} placeholder={rsvpStatus === "부분참석" ? "예: 알바 근무로 인해 3시 이후에 참석 가능합니다. (참석 가능 시간을 꼭 적어주세요!)" : "조교 서류 기록을 위해 불참 사유를 구체적으로 작성해 주세요."} className="w-full rounded-xl border border-slate-200 p-3 h-24 text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />
                     </div>
                   )}
 

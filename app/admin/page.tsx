@@ -88,7 +88,7 @@ export default function AdminPage() {
     const newSurveyData = {
       id: crypto.randomUUID(), 
       title: newTitle,
-      meeting_type: "전체모임", // 🛠️ 무조건 전체모임
+      meeting_type: "전체모임",
       target_team: "전체",
       status: "active",
       dates: datesPayload,
@@ -164,7 +164,6 @@ export default function AdminPage() {
   const partial = currentRsvpResponses.filter((r) => r.status === "부분참석");
   const absent = currentRsvpResponses.filter((r) => r.status === "불참");
 
-  // 🛠️ 3. 식사 여부 통계 로직
   const mealYesCount = currentRsvpResponses.filter(r => r.reason?.includes("[식사함]")).length;
   const extractMealBadge = (reason: string) => {
     if(reason?.includes("[식사함]")) return <span className="bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded text-[10px] ml-1">🍚 식사함</span>;
@@ -176,7 +175,6 @@ export default function AdminPage() {
     return reason.replace("[식사함] ", "").replace("[식사안함] ", "");
   };
 
-  // 🛠️ 4. 미응답자 즉시 추적 (현황판용)
   const unresponsiveForSelected = registeredUsers.filter(user => {
     if (!selectedSurvey) return false;
     if (selectedSurvey.status === "active") {
@@ -189,8 +187,8 @@ export default function AdminPage() {
   const activeAndFinalizedSurveys = surveys.filter(s => s.status === "active" || s.status === "finalized");
   const archivedSurveys = surveys.filter(s => s.status === "archived");
 
-  // 🛠️ 5. 유저 기수별 정렬 (43 ~ 49)
-  const usersByGeneration = registeredUsers.reduce((acc, user) => {
+  // 🛠️ TypeScript 엄격 검사 통과를 위해 any[] 타입 명시
+  const usersByGeneration = registeredUsers.reduce((acc: Record<string, any[]>, user: any) => {
     const gen = user.generation;
     if (!acc[gen]) acc[gen] = [];
     acc[gen].push(user);
@@ -269,7 +267,8 @@ export default function AdminPage() {
                 <div key={gen} className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
                   <h3 className="text-sm font-black text-blue-800 mb-3 border-b border-blue-100 pb-2">🎯 {gen}기 ({usersByGeneration[gen].length}명)</h3>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {usersByGeneration[gen].map(user => (
+                    {/* 🛠️ 타입 에러 수정: user: any 명시 */}
+                    {usersByGeneration[gen].map((user: any) => (
                       <div key={user.id} className="bg-white border border-slate-200 p-2.5 rounded-lg text-center shadow-sm text-sm font-bold text-slate-800">
                         {user.name}
                       </div>
@@ -344,7 +343,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* 🛠️ 에딧 모드(수정) 혹은 최초 확정 화면 */}
               {isFinalizing ? (
                 <div className="bg-amber-50/70 p-5 rounded-2xl border border-amber-200 shadow-sm space-y-4 animate-fade-in">
                   <h3 className="text-base font-black text-amber-900">✏️ 일정 내용 {selectedSurvey.status === 'active' ? '마감 및 최종 확정' : '수정 (업데이트)'}</h3>
@@ -364,7 +362,6 @@ export default function AdminPage() {
                 )
               )}
 
-              {/* 투표 중일 때 보여지는 득표율 차트 */}
               {selectedSurvey.status === "active" && (
                 <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100/70">
                   <h3 className="text-sm font-black text-blue-900 mb-4 uppercase tracking-wider">📊 날짜별 투표 현황 및 최적 시간대 분석</h3>
@@ -400,13 +397,11 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* 🛠️ 확정된 상태의 데이터 뷰 */}
               {(selectedSurvey.status === "finalized" || selectedSurvey.status === "archived") && (
                 <div className="space-y-6 animate-fade-in">
                   <div className={`p-5 rounded-2xl border shadow-inner space-y-2.5 text-sm relative ${selectedSurvey.status === 'archived' ? 'bg-slate-100 border-slate-300/80 text-slate-500' : 'bg-emerald-50/50 border-emerald-200/60 text-slate-700'}`}>
                     <div className="flex justify-between items-center">
                       <h3 className={`font-black text-base ${selectedSurvey.status === 'archived' ? 'text-slate-700' : 'text-emerald-900'}`}>📍 최종 공지 확정본</h3>
-                      {/* 🛠️ 2. 공지 수정(Edit) 버튼 장착 */}
                       {!isFinalizing && (
                         <button onClick={handleEditNoticeClick} className="bg-white border text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 shadow-sm hover:bg-slate-50">
                           ✏️ 내용 수정
@@ -421,7 +416,6 @@ export default function AdminPage() {
                   <div className="pt-4 border-t border-slate-200">
                     <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center justify-between">
                       🙋‍♂️ 실시간 참석 여부
-                      {/* 🛠️ 3. 총 식사 인원 카운터 배치 */}
                       <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 px-3 py-1.5 rounded-lg shadow-sm">
                         총 식사 인원: <strong>{mealYesCount}명</strong>
                       </span>
@@ -473,7 +467,6 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      {/* 🛠️ 4. 미응답자 대시보드 바로 띄우기 (최하단) */}
                       {unresponsiveForSelected.length > 0 && (
                         <div className="pt-4 border-t border-slate-200 mt-4">
                           <div className="flex items-center gap-1.5 mb-2.5">
@@ -499,4 +492,6 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
 

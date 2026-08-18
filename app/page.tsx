@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -8,6 +9,7 @@ export default function Home() {
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
   const [entered, setEntered] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // 연타 방지 플래그
 
   const [selectedCategory, setSelectedCategory] = useState(""); 
   const [allSurveys, setAllSurveys] = useState<any[]>([]);
@@ -74,24 +76,49 @@ export default function Home() {
     }
   };
 
+  // 🛠️ 중복 생성 및 공백 버그 원천 차단 로직
   const handleEnter = async () => {
-    if (!generation || !name || !pin) return alert("기수, 이름, 비밀번호를 모두 입력해주세요.");
-    if (pin.length !== 4) return alert("비밀번호는 4자리 숫자로 입력해주세요.");
+    const cleanGen = generation.trim();
+    const cleanName = name.trim();
+    const cleanPin = pin.trim();
 
-    const { data: existingUser } = await supabase.from("users").select("*").eq("generation", generation).eq("name", name).maybeSingle();
+    if (!cleanGen || !cleanName || !cleanPin) return alert("기수, 이름, 비밀번호를 모두 입력해주세요.");
+    if (cleanPin.length !== 4) return alert("비밀번호는 4자리 숫자로 입력해주세요.");
+    if (isSubmitting) return;
 
-    if (existingUser) {
-      if (existingUser.pin !== pin) return alert("비밀번호가 틀렸습니다! 다시 확인해주세요.");
-    } else {
-      if (!window.confirm(`처음 오셨군요! [${generation}기] [${name}]님, 비밀번호 [${pin}](으)로 계정을 생성할까요?`)) return;
-      const { error } = await supabase.from("users").insert([{ team: "미지정", generation, name, pin }]);
-      if (error) return alert("계정 생성에 실패했습니다.");
-      alert("계정이 성공적으로 만들어졌습니다!");
+    try {
+      setIsSubmitting(true);
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("*")
+        .eq("generation", cleanGen)
+        .eq("name", cleanName)
+        .maybeSingle();
+
+      if (existingUser) {
+        if (existingUser.pin !== cleanPin) {
+          setIsSubmitting(false);
+          return alert("비밀번호가 틀렸습니다! 다시 확인해주세요.");
+        }
+      } else {
+        if (!window.confirm(`처음 오셨군요! [${cleanGen}기] [${cleanName}]님, 비밀번호 [${cleanPin}](으)로 계정을 생성할까요?`)) {
+          setIsSubmitting(false);
+          return;
+        }
+        const { error } = await supabase.from("users").insert([{ team: "전체", generation: cleanGen, name: cleanName, pin: cleanPin }]);
+        if (error) {
+          setIsSubmitting(false);
+          return alert("계정 생성에 실패했습니다.");
+        }
+        alert("계정이 성공적으로 만들어졌습니다!");
+      }
+
+      localStorage.setItem("missionUser", JSON.stringify({ generation: cleanGen, name: cleanName, lastCategory: selectedCategory }));
+      setEntered(true);
+      fetchSurveys();
+    } finally {
+      setIsSubmitting(false);
     }
-
-    localStorage.setItem("missionUser", JSON.stringify({ generation, name, lastCategory: selectedCategory }));
-    setEntered(true);
-    fetchSurveys();
   };
 
   const handleLogout = () => {
@@ -114,13 +141,13 @@ export default function Home() {
     if (selectedSlots.length === 0) {
       if (!window.confirm("선택한 시간이 없습니다. 이대로 제출하시겠습니까?")) return;
     }
-    await supabase.from("survey_responses").delete().eq("survey_id", currentSurvey.id).eq("generation", generation).eq("name", name);
+    await supabase.from("survey_responses").delete().eq("survey_id", currentSurvey.id).eq("generation", generation.trim()).eq("name", name.trim());
 
     const newResponse = {
       survey_id: currentSurvey.id,
-      team: selectedCategory,
-      generation: generation,
-      name: name,
+      team: selectedCategory || "전체",
+      generation: generation.trim(),
+      name: name.trim(),
       slots: selectedSlots,
       memo: voteMemo, 
     };
@@ -139,7 +166,7 @@ export default function Home() {
     setRsvpReason("");
     setMealStatus("");
     
-    const { data } = await supabase.from("rsvp_responses").select("*").eq("survey_id", survey.id).eq("generation", generation).eq("name", name).maybeSingle();
+    const { data } = await supabase.from("rsvp_responses").select("*").eq("survey_id", survey.id).eq("generation", generation.trim()).eq("name", name.trim()).maybeSingle();
     if (data) {
       setRsvpStatus(data.status as any);
       if (data.reason?.startsWith("[식사함] ")) {
@@ -164,7 +191,7 @@ export default function Home() {
       return alert("참석 가능 시간 또는 사유를 작성해주세요.");
     }
 
-    await supabase.from("rsvp_responses").delete().eq("survey_id", currentSurvey.id).eq("generation", generation).eq("name", name);
+    await supabase.from("rsvp_responses").delete().eq("survey_id", currentSurvey.id).eq("generation", generation.trim()).eq("name", name.trim());
 
     let finalReasonToSave = rsvpReason.trim();
     if (rsvpStatus !== "불참" && mealStatus) {
@@ -173,9 +200,9 @@ export default function Home() {
 
     const { error } = await supabase.from("rsvp_responses").insert([{
       survey_id: currentSurvey.id,
-      team: selectedCategory,
-      generation: generation,
-      name: name,
+      team: selectedCategory || "전체",
+      generation: generation.trim(),
+      name: name.trim(),
       status: rsvpStatus,
       reason: finalReasonToSave
     }]);
@@ -221,8 +248,12 @@ export default function Home() {
                 <p className="text-[11px] text-slate-400 mt-1.5 pl-0.5">✨ 기억하기 쉽게 <strong>생일 4자리</strong> 설정을 권장합니다!</p>
               </div>
 
-              <button onClick={handleEnter} className="mt-4 w-full rounded-xl bg-blue-600 p-3.5 text-base font-black text-white shadow-md shadow-blue-100 hover:bg-blue-700 active:scale-[0.99] transition-all">
-                입장하기 →
+              <button 
+                onClick={handleEnter} 
+                disabled={isSubmitting}
+                className="mt-4 w-full rounded-xl bg-blue-600 p-3.5 text-base font-black text-white shadow-md shadow-blue-100 hover:bg-blue-700 active:scale-[0.99] disabled:bg-blue-300 transition-all"
+              >
+                {isSubmitting ? "확인 중..." : "입장하기 →"}
               </button>
             </div>
           </div>
@@ -266,14 +297,13 @@ export default function Home() {
               </div>
             )}
 
-            {/* 📋 리스트 메인 뷰: 드롭다운 유지 + 전체모임만 선택 가능 */}
             {viewMode === "list" && (
               <div className="space-y-5">
                 <div className="bg-gradient-to-b from-blue-50/70 to-blue-50/20 p-4 rounded-2xl border border-blue-100">
                   <label className="block text-xs font-black text-blue-700 uppercase tracking-wider mb-2 pl-0.5">🎯 모임 섹션 필터</label>
                   <select value={selectedCategory} onChange={handleCategoryChange} className="w-full rounded-xl border border-blue-200 p-3 text-base font-bold text-slate-900 bg-white shadow-sm focus:border-blue-500 focus:outline-none transition-all cursor-pointer">
                     <option value="">구분 항목을 선택하세요</option>
-                    <option value="전체모임">📢 전체 모임 일정 보기</option>
+                    <option value="전체모임">📢 전체 모임 일정 전체보기</option>
                   </select>
                 </div>
 
@@ -335,7 +365,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* 🗳️ 시간 투표 UI */}
             {viewMode === "vote" && currentSurvey && (
               <div className="animate-fade-in space-y-5">
                 <div>
@@ -377,7 +406,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* 📢 최종 공지 및 RSVP 체크 UI */}
             {viewMode === "notice" && currentSurvey && (
               <div className="animate-fade-in space-y-6">
                 <div className="space-y-2">
@@ -455,3 +483,4 @@ export default function Home() {
     </main>
   );
 }
+

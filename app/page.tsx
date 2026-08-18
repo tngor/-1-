@@ -56,7 +56,7 @@ export default function Home() {
     }
     let filtered: any[] = [];
     if (category === "전체모임") {
-      filtered = surveys.filter(s => s.meeting_type === "전체모임" || s.target_team === "전체");
+      filtered = surveys.filter(s => s.meeting_type === "전체모임" || s.target_team === "전체" || !s.meeting_type);
     } else {
       filtered = surveys.filter(s => (s.meeting_type === "조별모임" || !s.meeting_type) && s.target_team === category);
     }
@@ -228,7 +228,6 @@ export default function Home() {
           </div>
         ) : (
           <div className="animate-fade-in">
-            {/* 🛠️ 수혁님 피드백 반영: 상단 프로필 헤더 '단원' 명칭 제거 */}
             <div className="mb-5 flex justify-between items-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
               <div className="flex items-center gap-2 pl-1">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -267,31 +266,27 @@ export default function Home() {
               </div>
             )}
 
+            {/* 📋 리스트 메인 뷰: 드롭다운 유지 + 전체모임만 선택 가능 */}
             {viewMode === "list" && (
               <div className="space-y-5">
                 <div className="bg-gradient-to-b from-blue-50/70 to-blue-50/20 p-4 rounded-2xl border border-blue-100">
                   <label className="block text-xs font-black text-blue-700 uppercase tracking-wider mb-2 pl-0.5">🎯 모임 섹션 필터</label>
                   <select value={selectedCategory} onChange={handleCategoryChange} className="w-full rounded-xl border border-blue-200 p-3 text-base font-bold text-slate-900 bg-white shadow-sm focus:border-blue-500 focus:outline-none transition-all cursor-pointer">
                     <option value="">구분 항목을 선택하세요</option>
-                    <option value="전체모임">📢 전체 모임 일정 전체보기</option>
-                    <option value="1조">👥 1조 모임 일정 필터링</option>
-                    <option value="2조">👥 2조 모임 일정 필터링</option>
-                    <option value="3조">👥 3조 모임 일정 필터링</option>
-                    <option value="4조">👥 4조 모임 일정 필터링</option>
-                    <option value="5조">👥 5조 모임 일정 필터링</option>
+                    <option value="전체모임">📢 전체 모임 일정 보기</option>
                   </select>
                 </div>
 
                 {!selectedCategory ? (
                   <div className="text-center py-10 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
                     <span className="text-3xl">🗺️</span>
-                    <p className="text-slate-400 text-sm font-bold mt-2">상단에서 보고 싶은 조나 전체모임을 고르시면<br/>해당하는 일정이 나타납니다.</p>
+                    <p className="text-slate-400 text-sm font-bold mt-2">상단에서 전체모임을 선택하시면<br/>일정이 나타납니다.</p>
                   </div>
                 ) : (
                   <div className="space-y-5 animate-fade-in">
                     <div>
                       <h3 className="mb-2 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">
-                        {selectedCategory === "전체모임" ? "⏳ 진행 중인 전체 투표" : `⏳ 진행 중인 조별 투표 (${selectedCategory})`}
+                        ⏳ 진행 중인 전체 투표
                       </h3>
                       {activeSurveys.length === 0 ? (
                         <p className="text-xs text-slate-400 bg-slate-50 p-4 rounded-xl text-center border border-dashed font-medium">현재 활성화된 투표가 없습니다.</p>
@@ -301,8 +296,8 @@ export default function Home() {
                             <button key={survey.id} onClick={() => { setCurrentSurvey(survey); setViewMode("vote"); setVoteMemo(""); }} className="w-full text-left p-4 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-400 transition-all active:scale-[0.99] flex justify-between items-center group">
                               <div className="flex flex-col gap-1.5">
                                 <span className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-tight">{survey.title}</span>
-                                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded w-max ${survey.meeting_type === '전체모임' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'bg-orange-50 text-orange-600 border border-orange-100'}`}>
-                                  {survey.meeting_type || "조별모임"}
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded w-max bg-purple-50 text-purple-600 border border-purple-100">
+                                  전체모임
                                 </span>
                               </div>
                               <span className="text-xs bg-blue-600 text-white font-extrabold px-3 py-1.5 rounded-lg shadow-sm shrink-0 ml-3">투표하기</span>
@@ -314,7 +309,7 @@ export default function Home() {
 
                     <div>
                       <h3 className="mb-2 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">
-                        {selectedCategory === "전체모임" ? "📢 확정된 전체 공지" : `📢 확정된 조별 공지 (${selectedCategory})`}
+                        📢 확정된 전체 공지
                       </h3>
                       {finalizedSurveys.length === 0 ? (
                         <p className="text-xs text-slate-400 bg-slate-50 p-4 rounded-xl text-center border border-dashed font-medium">확정 배포된 공지가 없습니다.</p>
@@ -324,8 +319,8 @@ export default function Home() {
                             <button key={survey.id} onClick={() => openNotice(survey)} className="w-full text-left p-4 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-emerald-400 transition-all active:scale-[0.99] flex justify-between items-center group">
                               <div className="flex flex-col gap-1.5">
                                 <span className="font-bold text-slate-900 group-hover:text-emerald-600 transition-colors leading-tight">{survey.title}</span>
-                                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded w-max ${survey.meeting_type === '전체모임' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'bg-orange-50 text-orange-600 border border-orange-100'}`}>
-                                  {survey.meeting_type || "조별모임"}
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded w-max bg-purple-50 text-purple-600 border border-purple-100">
+                                  전체모임
                                 </span>
                               </div>
                               <span className="text-xs bg-emerald-600 text-white font-extrabold px-3 py-1.5 rounded-lg shadow-sm shrink-0 ml-3">출석체크</span>
@@ -334,17 +329,18 @@ export default function Home() {
                         </div>
                       )}
                     </div>
+
                   </div>
                 )}
               </div>
             )}
 
-            {/* 🗳️ 첫 투표 화면 (날짜+요일 자동 표시 연동 완료) */}
+            {/* 🗳️ 시간 투표 UI */}
             {viewMode === "vote" && currentSurvey && (
               <div className="animate-fade-in space-y-5">
                 <div>
-                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-md border ${currentSurvey.meeting_type === '전체모임' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
-                    {currentSurvey.meeting_type || "조별모임"}
+                  <span className="text-[10px] font-black px-2.5 py-1 rounded-md border bg-purple-50 text-purple-600 border-purple-100">
+                    전체모임
                   </span>
                   <h2 className="text-xl font-black text-slate-900 mt-2.5 leading-tight">{currentSurvey.title}</h2>
                   <p className="text-xs text-slate-400 mt-1 font-medium">가능한 시간대를 모두 복수 선택해 주세요.</p>
@@ -353,7 +349,6 @@ export default function Home() {
                 <div className="space-y-4">
                   {currentSurvey.dates.map((day: any) => (
                     <div key={day.date} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      {/* 🛠️ 새로 만드는 일정의 경우 이곳에 날짜와 요일이 세트로 노출됩니다 */}
                       <h3 className="mb-2.5 text-sm font-extrabold text-slate-700 flex items-center gap-1.5">📅 {day.date}</h3>
                       <div className="grid gap-2">
                         {day.slots.map((slot: string) => {
@@ -382,13 +377,13 @@ export default function Home() {
               </div>
             )}
 
-            {/* 📢 최종 확정 공지 및 RSVP 체크 UI 화면 */}
+            {/* 📢 최종 공지 및 RSVP 체크 UI */}
             {viewMode === "notice" && currentSurvey && (
               <div className="animate-fade-in space-y-6">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${currentSurvey.meeting_type === '전체모임' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
-                      {currentSurvey.meeting_type || "조별모임"}
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded border bg-purple-50 text-purple-600 border-purple-100">
+                      전체모임
                     </span>
                     <span className="text-xs font-extrabold bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded">최종공지 완료</span>
                   </div>
@@ -427,7 +422,6 @@ export default function Home() {
                     </button>
                   </div>
 
-                  {/* 🍽️ 식사 여부 선택 토글 */}
                   {(rsvpStatus === "참석" || rsvpStatus === "부분참석") && (
                     <div className="mb-4 animate-fade-in bg-orange-50/50 p-4 rounded-xl border border-orange-200/60 shadow-sm">
                       <label className="block text-xs font-black text-orange-800 mb-2">🍽️ 모임 식사 여부</label>
@@ -442,7 +436,6 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* 🛠️ 수혁님 피드백 반영: 부분참석 예시 알바 내용 및 지각/조퇴 시간 필수 기재 가이드 수정 */}
                   {(rsvpStatus === "부분참석" || rsvpStatus === "불참") && (
                     <div className="mb-4 animate-fade-in">
                       <textarea value={rsvpReason} onChange={(e) => setRsvpReason(e.target.value)} placeholder={rsvpStatus === "부분참석" ? "예: 알바 근무로 인해 3시 이후에 참석 가능합니다. (참석 가능 시간을 꼭 적어주세요!)" : "조교 서류 기록을 위해 불참 사유를 구체적으로 작성해 주세요."} className="w-full rounded-xl border border-slate-200 p-3 h-24 text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />

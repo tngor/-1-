@@ -4,12 +4,15 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<"status" | "users" | "create" | "archived">("status");
+  // 🛠️ 탭에 'baggage' 추가
+  const [activeTab, setActiveTab] = useState<"status" | "users" | "create" | "archived" | "baggage">("status");
   
   const [surveys, setSurveys] = useState<any[]>([]);
   const [surveyResponses, setSurveyResponses] = useState<any[]>([]);
   const [rsvpResponses, setRsvpResponses] = useState<any[]>([]);
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]); 
+  const [baggages, setBaggages] = useState<any[]>([]); // 🎒 물품 데이터
+  
   const [selectedSurvey, setSelectedSurvey] = useState<any>(null);
 
   const [newTitle, setNewTitle] = useState("");
@@ -36,6 +39,10 @@ export default function AdminPage() {
     setRsvpResponses(rsvpData || []);
     const { data: uData } = await supabase.from("users").select("*");
     setRegisteredUsers(uData || []);
+    
+    // 🎒 물품 현황 불러오기
+    const { data: bData } = await supabase.from("mission_baggage").select("*");
+    setBaggages(bData || []);
   };
 
   const handleAddDate = () => {
@@ -187,7 +194,6 @@ export default function AdminPage() {
   const activeAndFinalizedSurveys = surveys.filter(s => s.status === "active" || s.status === "finalized");
   const archivedSurveys = surveys.filter(s => s.status === "archived");
 
-  // 🛠️ TypeScript 엄격 검사 통과를 위해 any[] 타입 명시
   const usersByGeneration = registeredUsers.reduce((acc: Record<string, any[]>, user: any) => {
     const gen = user.generation;
     if (!acc[gen]) acc[gen] = [];
@@ -195,6 +201,13 @@ export default function AdminPage() {
     return acc;
   }, {} as Record<string, any[]>);
   const sortedGenerations = Object.keys(usersByGeneration).map(Number).sort((a, b) => a - b);
+
+  // 🎒 물품 데이터 계산 로직
+  const totalSleepingBags = baggages.reduce((sum, b) => sum + (b.sleeping_bag_count || 0), 0);
+  const totalMats = baggages.reduce((sum, b) => sum + (b.mat_count || 0), 0);
+  
+  const baggageSubmittedUsers = baggages.map(b => b.name);
+  const baggageUnsubmittedUsers = registeredUsers.filter(u => !baggageSubmittedUsers.includes(u.name));
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 p-6 flex gap-6 font-sans selection:bg-blue-100">
@@ -205,7 +218,8 @@ export default function AdminPage() {
           <h1 className="text-xl font-black text-slate-900 tracking-tight mt-1.5">📋 선교 조교 대시보드</h1>
         </div>
         
-        <div className="grid grid-cols-4 gap-0.5 bg-slate-100 p-1 rounded-xl mb-4 border border-slate-200/40">
+        {/* 🛠️ 탭 5개로 변경 (grid-cols-5) */}
+        <div className="grid grid-cols-5 gap-0.5 bg-slate-100 p-1 rounded-xl mb-4 border border-slate-200/40">
           <button onClick={() => { setActiveTab("status"); setSelectedSurvey(null); setIsFinalizing(false); }} className={`text-center py-2 text-[11px] font-black rounded-lg transition-all ${activeTab === "status" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
             현황판
           </button>
@@ -215,8 +229,12 @@ export default function AdminPage() {
           <button onClick={() => setActiveTab("create")} className={`text-center py-2 text-[11px] font-black rounded-lg transition-all ${activeTab === "create" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
             ➕ 개설
           </button>
+          {/* 🎒 물품 탭 버튼 */}
+          <button onClick={() => { setActiveTab("baggage"); setSelectedSurvey(null); setIsFinalizing(false); }} className={`text-center py-2 text-[11px] font-black rounded-lg transition-all ${activeTab === "baggage" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+            🎒 물품
+          </button>
           <button onClick={() => { setActiveTab("archived"); setSelectedSurvey(null); setIsFinalizing(false); }} className={`text-center py-2 text-[11px] font-black rounded-lg transition-all ${activeTab === "archived" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
-            📂 보관함
+            📂 보관
           </button>
         </div>
 
@@ -249,25 +267,121 @@ export default function AdminPage() {
               ))
             )
           )}
+          {/* 다른 탭 선택 시 왼쪽 패널 설명 */}
+          {(activeTab === "users" || activeTab === "create" || activeTab === "baggage") && (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center opacity-70 pb-10">
+              <span className="text-4xl mb-3">{activeTab === "baggage" ? "🎒" : activeTab === "users" ? "👥" : "✨"}</span>
+              <p className="text-xs font-bold leading-relaxed px-4">
+                우측 패널에서 상세 내용을<br/>확인하고 관리하세요.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="w-2/3 bg-white p-7 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-200/60 overflow-y-auto h-[calc(100vh-3rem)]">
         
-        {/* 👥 명단 탭 (기수별 블록 분리) */}
+        {/* 🎒 물품 탭 (새로 추가됨) */}
+        {activeTab === "baggage" && (
+          <div className="animate-fade-in space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                🎒 선교 취침 물품 확보 현황
+              </h2>
+              <p className="text-xs text-slate-400 mt-1 font-medium">단원들이 입력한 침낭 및 매트 수량을 집계합니다.</p>
+            </div>
+
+            {/* 통계 요약 카드 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-indigo-50 border border-indigo-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                <div>
+                  <span className="block text-xs font-black text-indigo-500 mb-1">총 확보된 침낭 수량</span>
+                  <div className="text-2xl font-black text-indigo-900 flex items-baseline gap-1">
+                    {totalSleepingBags}<span className="text-sm font-bold text-indigo-700">개</span>
+                  </div>
+                </div>
+                <span className="text-4xl">🐛</span>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                <div>
+                  <span className="block text-xs font-black text-emerald-600 mb-1">총 확보된 매트 수량</span>
+                  <div className="text-2xl font-black text-emerald-900 flex items-baseline gap-1">
+                    {totalMats}<span className="text-sm font-bold text-emerald-700">개</span>
+                  </div>
+                </div>
+                <span className="text-4xl">🧘‍♂️</span>
+              </div>
+            </div>
+
+            {/* 응답자 명단 */}
+            <div className="space-y-4 pt-2">
+              <h3 className="text-sm font-black text-slate-800 border-b pb-2 flex items-center justify-between">
+                ✅ 수화물 내역 제출 완료 ({baggages.length}명)
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {baggages.map(b => {
+                  // 유저 기수 찾기 (표시용)
+                  const matchedUser = registeredUsers.find(u => u.name === b.name);
+                  const genStr = matchedUser ? `${matchedUser.generation}기 ` : "";
+                  
+                  return (
+                    <div key={b.id} className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-sm hover:border-indigo-300 transition-all group relative">
+                      <div className="font-bold text-sm text-slate-800 mb-2">
+                        {genStr}{b.name}
+                      </div>
+                      <div className="flex gap-2">
+                        {b.has_sleeping_bag ? (
+                          <span className="text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded">침낭: {b.sleeping_bag_count}개</span>
+                        ) : (
+                          <span className="text-[11px] font-medium text-slate-400 bg-slate-50 border px-2 py-0.5 rounded">침낭 X</span>
+                        )}
+                        {b.has_mat ? (
+                          <span className="text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded">매트: {b.mat_count}개</span>
+                        ) : (
+                          <span className="text-[11px] font-medium text-slate-400 bg-slate-50 border px-2 py-0.5 rounded">매트 X</span>
+                        )}
+                      </div>
+                      {b.other_items && (
+                        <div className="mt-2 text-[10px] text-slate-500 bg-slate-50 p-1.5 rounded leading-tight border border-slate-100">
+                          <strong className="text-slate-600 block mb-0.5">💬 특이사항:</strong> {b.other_items}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 미응답자 추적 */}
+              {baggageUnsubmittedUsers.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-slate-200">
+                  <h3 className="text-sm font-black text-rose-600 mb-3">
+                    ⏳ 아직 짐 조사를 제출하지 않은 단원 ({baggageUnsubmittedUsers.length}명)
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {baggageUnsubmittedUsers.map(u => (
+                      <span key={u.id} className="bg-white border border-dashed border-rose-300 text-rose-500 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm">
+                        {u.generation}기 {u.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === "users" && (
           <div className="animate-fade-in space-y-6">
             <div className="border-b border-slate-100 pb-4">
               <h2 className="text-xl font-black text-slate-900">👥 등록된 선교인원 명단 ({registeredUsers.length}명)</h2>
               <p className="text-xs text-slate-400 mt-1 font-medium">가입을 완료한 인원이 기수별로 표시됩니다.</p>
             </div>
-
             <div className="space-y-6">
               {sortedGenerations.map(gen => (
                 <div key={gen} className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
                   <h3 className="text-sm font-black text-blue-800 mb-3 border-b border-blue-100 pb-2">🎯 {gen}기 ({usersByGeneration[gen].length}명)</h3>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {/* 🛠️ 타입 에러 수정: user: any 명시 */}
                     {usersByGeneration[gen].map((user: any) => (
                       <div key={user.id} className="bg-white border border-slate-200 p-2.5 rounded-lg text-center shadow-sm text-sm font-bold text-slate-800">
                         {user.name}
@@ -280,7 +394,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ➕ 새로운 일정 개설 */}
         {activeTab === "create" && (
           <div className="animate-fade-in max-w-xl mx-auto space-y-5">
             <div className="border-b border-slate-100 pb-3">
@@ -492,6 +605,5 @@ export default function AdminPage() {
     </div>
   );
 }
-
 
 

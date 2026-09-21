@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -9,7 +8,7 @@ export default function Home() {
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
   const [entered, setEntered] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // 연타 방지 플래그
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [selectedCategory, setSelectedCategory] = useState(""); 
   const [allSurveys, setAllSurveys] = useState<any[]>([]);
@@ -17,7 +16,7 @@ export default function Home() {
   const [finalizedSurveys, setFinalizedSurveys] = useState<any[]>([]);
   
   const [currentSurvey, setCurrentSurvey] = useState<any>(null);
-  const [viewMode, setViewMode] = useState<"list" | "vote" | "notice">("list");
+  const [viewMode, setViewMode] = useState<"list" | "vote" | "notice" | "baggage">("list");
   
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [voteMemo, setVoteMemo] = useState(""); 
@@ -27,6 +26,15 @@ export default function Home() {
   const [mealStatus, setMealStatus] = useState<"식사함" | "식사안함" | "">(""); 
 
   const [showRules, setShowRules] = useState(false);
+
+  // 🎒 물품 파악용 상태
+  const [hasSleepingBag, setHasSleepingBag] = useState(false);
+  const [sleepingBagCount, setSleepingBagCount] = useState(1);
+  const [hasMat, setHasMat] = useState(false);
+  const [matCount, setMatCount] = useState(1);
+  const [hasNone, setHasNone] = useState(false); // 🛠️ '둘 다 없음' 상태 추가
+  const [otherItems, setOtherItems] = useState("");
+  const [isBaggageSubmitted, setIsBaggageSubmitted] = useState(false);
 
   useEffect(() => {
     fetchSurveys();
@@ -46,6 +54,24 @@ export default function Home() {
       if (parsed.lastCategory) {
         setSelectedCategory(parsed.lastCategory);
         setupMySurveys(parsed.lastCategory, fetchedSurveys);
+      }
+      checkBaggageStatus(parsed.name); 
+    }
+  };
+
+  const checkBaggageStatus = async (userName: string) => {
+    const { data } = await supabase.from("mission_baggage").select("*").eq("name", userName).maybeSingle();
+    if (data) {
+      setIsBaggageSubmitted(true);
+      setHasSleepingBag(data.has_sleeping_bag);
+      setSleepingBagCount(data.sleeping_bag_count || 1);
+      setHasMat(data.has_mat);
+      setMatCount(data.mat_count || 1);
+      setOtherItems(data.other_items || "");
+      
+      // 🛠️ 저장된 데이터가 둘 다 false면 '없음' 체크
+      if (!data.has_sleeping_bag && !data.has_mat) {
+        setHasNone(true);
       }
     }
   };
@@ -76,7 +102,6 @@ export default function Home() {
     }
   };
 
-  // 🛠️ 중복 생성 및 공백 버그 원천 차단 로직
   const handleEnter = async () => {
     const cleanGen = generation.trim();
     const cleanName = name.trim();
@@ -116,6 +141,7 @@ export default function Home() {
       localStorage.setItem("missionUser", JSON.stringify({ generation: cleanGen, name: cleanName, lastCategory: selectedCategory }));
       setEntered(true);
       fetchSurveys();
+      checkBaggageStatus(cleanName);
     } finally {
       setIsSubmitting(false);
     }
@@ -212,6 +238,38 @@ export default function Home() {
     setViewMode("list");
   };
 
+  // 🎒 물품 데이터 저장 함수 (에러 핸들링 강화)
+  const handleSubmitBaggage = async () => {
+    if (!hasSleepingBag && !hasMat && !hasNone) {
+      return alert("가져올 수 있는 품목을 선택하거나 '둘 다 없음'을 체크해 주세요.");
+    }
+    if (hasSleepingBag && sleepingBagCount < 1) return alert("침낭 수량을 확인해 주세요.");
+    if (hasMat && matCount < 1) return alert("매트 수량을 확인해 주세요.");
+
+    // 기존 내역 지우기
+    await supabase.from("mission_baggage").delete().eq("name", name.trim());
+
+    // 🛠️ 명시적으로 uuid를 프론트에서 생성해 넘김으로써 DB의 uuid_generate_v4() 의존도 제거
+    const { error } = await supabase.from("mission_baggage").insert([{
+      id: crypto.randomUUID(), 
+      name: name.trim(),
+      has_sleeping_bag: hasSleepingBag,
+      sleeping_bag_count: hasSleepingBag ? sleepingBagCount : 0,
+      has_mat: hasMat,
+      mat_count: hasMat ? matCount : 0,
+      other_items: otherItems.trim()
+    }]);
+
+    if (error) {
+      console.error(error);
+      return alert(`물품 등록에 실패했습니다.\n사유: ${error.message}\n(RLS 권한 문제일 수 있습니다.)`);
+    }
+    
+    alert("개인 물품 내역이 성공적으로 저장되었습니다! 🎒");
+    setIsBaggageSubmitted(true);
+    setViewMode("list");
+  };
+
   return (
     <main className="min-h-screen w-full bg-slate-50 text-slate-800 flex flex-col justify-start items-center px-4 py-6 font-sans selection:bg-blue-100">
       <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
@@ -277,7 +335,22 @@ export default function Home() {
             </div>
 
             {viewMode === "list" && (
-              <div className="mb-4">
+              <div className="mb-4 space-y-3">
+                <button onClick={() => setViewMode("baggage")} className={`w-full p-4 rounded-2xl font-black text-sm flex justify-between items-center shadow-sm transition-all active:scale-[0.99] border ${isBaggageSubmitted ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' : 'bg-indigo-600 border-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🎒</span>
+                    <div className="text-left">
+                      <div className="leading-tight">선교 개인 물품 파악</div>
+                      {isBaggageSubmitted ? (
+                        <div className="text-[10px] font-bold opacity-80 mt-0.5">✅ 제출 완료 (클릭하여 수정 가능)</div>
+                      ) : (
+                        <div className="text-[10px] font-medium opacity-90 mt-0.5">배송을 위해 수량을 입력해 주세요!</div>
+                      )}
+                    </div>
+                  </div>
+                  <span>→</span>
+                </button>
+
                 <button onClick={() => setShowRules(!showRules)} className="w-full bg-slate-900 text-white p-3 rounded-xl font-bold text-xs flex justify-between items-center shadow transition-all active:scale-[0.99]">
                   <span className="flex items-center gap-1.5">📜 피지 선교 준비 단원 수칙 보기</span>
                   <span className="text-slate-400 transition-transform duration-200" style={{ transform: showRules ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
@@ -297,6 +370,112 @@ export default function Home() {
               </div>
             )}
 
+            {/* 🎒 물품 입력 뷰 */}
+            {viewMode === "baggage" && (
+              <div className="animate-fade-in space-y-6">
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-black px-2.5 py-1 rounded-md border bg-indigo-50 text-indigo-600 border-indigo-100">
+                    사전 수화물 조사
+                  </span>
+                  <h2 className="text-xl font-black text-slate-900 mt-2.5 leading-tight">🎒 개인 침낭 및 매트 파악</h2>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                    본인이 가져올 수 있는 취침용 물품 수량을 파악합니다.<br/>
+                    <strong className="text-indigo-600">여유분이 있다면 최대한 많이 등록해 주시면 좋습니다!</strong>
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {/* 🛠️ 침낭 섹션 (텍스트 및 디자인 단순화) */}
+                  <div className={`p-4 rounded-2xl border transition-all ${hasSleepingBag ? 'bg-indigo-50/50 border-indigo-200' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-sm font-black text-slate-800">
+                        침낭
+                      </label>
+                      <input 
+                        type="checkbox" 
+                        checked={hasSleepingBag} 
+                        onChange={(e) => {
+                          setHasSleepingBag(e.target.checked);
+                          if (e.target.checked) setHasNone(false); // 선택 시 '없음' 자동 해제
+                        }} 
+                        className="w-5 h-5 accent-indigo-600 cursor-pointer" 
+                      />
+                    </div>
+                    {hasSleepingBag && (
+                      <div className="mt-3 pt-3 border-t border-indigo-100 flex items-center justify-between animate-fade-in">
+                        <span className="text-xs font-bold text-indigo-800">수량</span>
+                        <div className="flex items-center gap-3 bg-white border border-indigo-100 rounded-lg p-1">
+                          <button onClick={() => setSleepingBagCount(Math.max(1, sleepingBagCount - 1))} className="w-8 h-8 flex items-center justify-center bg-slate-100 rounded text-slate-600 font-bold active:scale-95">-</button>
+                          <span className="font-black text-indigo-700 w-4 text-center">{sleepingBagCount}</span>
+                          <button onClick={() => setSleepingBagCount(sleepingBagCount + 1)} className="w-8 h-8 flex items-center justify-center bg-indigo-100 rounded text-indigo-700 font-bold active:scale-95">+</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 🛠️ 매트 섹션 */}
+                  <div className={`p-4 rounded-2xl border transition-all ${hasMat ? 'bg-indigo-50/50 border-indigo-200' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-sm font-black text-slate-800">
+                        매트
+                      </label>
+                      <input 
+                        type="checkbox" 
+                        checked={hasMat} 
+                        onChange={(e) => {
+                          setHasMat(e.target.checked);
+                          if (e.target.checked) setHasNone(false); // 선택 시 '없음' 자동 해제
+                        }} 
+                        className="w-5 h-5 accent-indigo-600 cursor-pointer" 
+                      />
+                    </div>
+                    {hasMat && (
+                      <div className="mt-3 pt-3 border-t border-indigo-100 flex items-center justify-between animate-fade-in">
+                        <span className="text-xs font-bold text-indigo-800">수량</span>
+                        <div className="flex items-center gap-3 bg-white border border-indigo-100 rounded-lg p-1">
+                          <button onClick={() => setMatCount(Math.max(1, matCount - 1))} className="w-8 h-8 flex items-center justify-center bg-slate-100 rounded text-slate-600 font-bold active:scale-95">-</button>
+                          <span className="font-black text-indigo-700 w-4 text-center">{matCount}</span>
+                          <button onClick={() => setMatCount(matCount + 1)} className="w-8 h-8 flex items-center justify-center bg-indigo-100 rounded text-indigo-700 font-bold active:scale-95">+</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 🛠️ 둘 다 없음 섹션 (새로 추가됨) */}
+                  <div className={`p-4 rounded-2xl border transition-all ${hasNone ? 'bg-slate-800 border-slate-900' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex justify-between items-center">
+                      <label className={`text-sm font-black ${hasNone ? 'text-white' : 'text-slate-800'}`}>
+                        없음 (침낭/매트 모두 없음)
+                      </label>
+                      <input 
+                        type="checkbox" 
+                        checked={hasNone} 
+                        onChange={(e) => {
+                          setHasNone(e.target.checked);
+                          if (e.target.checked) {
+                            setHasSleepingBag(false);
+                            setHasMat(false);
+                          }
+                        }} 
+                        className="w-5 h-5 accent-slate-900 cursor-pointer" 
+                      />
+                    </div>
+                  </div>
+
+                  {/* 기타 전달 사항 */}
+                  <div>
+                    <label className="block text-xs font-black text-slate-500 mb-1.5 pl-0.5">기타 전달 사항 (선택)</label>
+                    <textarea value={otherItems} onChange={(e) => setOtherItems(e.target.value)} placeholder="부피가 크다거나, 다인용 매트일 경우 자유롭게 적어주세요." className="w-full rounded-xl border border-slate-200 p-3 h-20 text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all shadow-inner" />
+                  </div>
+                </div>
+
+                <button onClick={handleSubmitBaggage} className="w-full rounded-xl bg-indigo-600 p-4 text-base font-black text-white shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all mt-2 active:scale-[0.99]">
+                  {isBaggageSubmitted ? "물품 내역 수정하기" : "물품 파악 제출하기"}
+                </button>
+              </div>
+            )}
+
+            {/* 기존 리스트/투표/공지 화면 */}
             {viewMode === "list" && (
               <div className="space-y-5">
                 <div className="bg-gradient-to-b from-blue-50/70 to-blue-50/20 p-4 rounded-2xl border border-blue-100">
@@ -315,9 +494,7 @@ export default function Home() {
                 ) : (
                   <div className="space-y-5 animate-fade-in">
                     <div>
-                      <h3 className="mb-2 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">
-                        ⏳ 진행 중인 전체 투표
-                      </h3>
+                      <h3 className="mb-2 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">⏳ 진행 중인 전체 투표</h3>
                       {activeSurveys.length === 0 ? (
                         <p className="text-xs text-slate-400 bg-slate-50 p-4 rounded-xl text-center border border-dashed font-medium">현재 활성화된 투표가 없습니다.</p>
                       ) : (
@@ -326,9 +503,7 @@ export default function Home() {
                             <button key={survey.id} onClick={() => { setCurrentSurvey(survey); setViewMode("vote"); setVoteMemo(""); }} className="w-full text-left p-4 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-blue-400 transition-all active:scale-[0.99] flex justify-between items-center group">
                               <div className="flex flex-col gap-1.5">
                                 <span className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-tight">{survey.title}</span>
-                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded w-max bg-purple-50 text-purple-600 border border-purple-100">
-                                  전체모임
-                                </span>
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded w-max bg-purple-50 text-purple-600 border border-purple-100">전체모임</span>
                               </div>
                               <span className="text-xs bg-blue-600 text-white font-extrabold px-3 py-1.5 rounded-lg shadow-sm shrink-0 ml-3">투표하기</span>
                             </button>
@@ -338,9 +513,7 @@ export default function Home() {
                     </div>
 
                     <div>
-                      <h3 className="mb-2 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">
-                        📢 확정된 전체 공지
-                      </h3>
+                      <h3 className="mb-2 text-xs font-black text-slate-400 uppercase tracking-wider pl-1">📢 확정된 전체 공지</h3>
                       {finalizedSurveys.length === 0 ? (
                         <p className="text-xs text-slate-400 bg-slate-50 p-4 rounded-xl text-center border border-dashed font-medium">확정 배포된 공지가 없습니다.</p>
                       ) : (
@@ -349,9 +522,7 @@ export default function Home() {
                             <button key={survey.id} onClick={() => openNotice(survey)} className="w-full text-left p-4 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-emerald-400 transition-all active:scale-[0.99] flex justify-between items-center group">
                               <div className="flex flex-col gap-1.5">
                                 <span className="font-bold text-slate-900 group-hover:text-emerald-600 transition-colors leading-tight">{survey.title}</span>
-                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded w-max bg-purple-50 text-purple-600 border border-purple-100">
-                                  전체모임
-                                </span>
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded w-max bg-purple-50 text-purple-600 border border-purple-100">전체모임</span>
                               </div>
                               <span className="text-xs bg-emerald-600 text-white font-extrabold px-3 py-1.5 rounded-lg shadow-sm shrink-0 ml-3">출석체크</span>
                             </button>
@@ -359,7 +530,6 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-
                   </div>
                 )}
               </div>
@@ -368,13 +538,10 @@ export default function Home() {
             {viewMode === "vote" && currentSurvey && (
               <div className="animate-fade-in space-y-5">
                 <div>
-                  <span className="text-[10px] font-black px-2.5 py-1 rounded-md border bg-purple-50 text-purple-600 border-purple-100">
-                    전체모임
-                  </span>
+                  <span className="text-[10px] font-black px-2.5 py-1 rounded-md border bg-purple-50 text-purple-600 border-purple-100">전체모임</span>
                   <h2 className="text-xl font-black text-slate-900 mt-2.5 leading-tight">{currentSurvey.title}</h2>
                   <p className="text-xs text-slate-400 mt-1 font-medium">가능한 시간대를 모두 복수 선택해 주세요.</p>
                 </div>
-
                 <div className="space-y-4">
                   {currentSurvey.dates.map((day: any) => (
                     <div key={day.date} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
@@ -394,12 +561,10 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-                
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-1.5 pl-0.5">📝 조교 비고 전달사항</label>
                   <textarea value={voteMemo} onChange={(e) => setVoteMemo(e.target.value)} placeholder="개인적인 일정이나, 시간 조율이 필요한 경우 내용을 상세하게 적어주세요." className="w-full rounded-xl border border-slate-200 p-3 h-24 text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />
                 </div>
-
                 <button onClick={handleSubmitVote} className="w-full rounded-xl bg-blue-600 p-4 text-base font-black text-white shadow-md shadow-blue-100 hover:bg-blue-700 transition-all">
                   투표 제출하기
                 </button>
@@ -410,14 +575,11 @@ export default function Home() {
               <div className="animate-fade-in space-y-6">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded border bg-purple-50 text-purple-600 border-purple-100">
-                      전체모임
-                    </span>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded border bg-purple-50 text-purple-600 border-purple-100">전체모임</span>
                     <span className="text-xs font-extrabold bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded">최종공지 완료</span>
                   </div>
                   <h2 className="text-xl font-black text-slate-900 leading-tight">{currentSurvey.title}</h2>
                 </div>
-                
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3.5 shadow-inner">
                   <div className="flex items-start gap-2.5">
                     <span className="text-base shrink-0 mt-0.5">📍</span>
@@ -434,53 +596,36 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-
                 <div className="pt-2 border-t border-slate-100">
                   <h3 className="text-sm font-black text-slate-900 mb-3 pl-0.5">🙋‍♂️ 나의 참석 여부 제출</h3>
-                  
                   <div className="flex gap-2 mb-4">
-                    <button onClick={() => setRsvpStatus("참석")} className={`flex-1 py-3 text-sm font-black rounded-xl transition-all shadow-sm active:scale-95 ${rsvpStatus === "참석" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>
-                      참석
-                    </button>
-                    <button onClick={() => setRsvpStatus("부분참석")} className={`flex-1 py-3 text-sm font-black rounded-xl transition-all shadow-sm active:scale-95 ${rsvpStatus === "부분참석" ? "bg-amber-500 text-white border-amber-500" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>
-                      부분참석
-                    </button>
-                    <button onClick={() => setRsvpStatus("불참")} className={`flex-1 py-3 text-sm font-black rounded-xl transition-all shadow-sm active:scale-95 ${rsvpStatus === "불참" ? "bg-rose-500 text-white border-rose-500" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>
-                      불참
-                    </button>
+                    <button onClick={() => setRsvpStatus("참석")} className={`flex-1 py-3 text-sm font-black rounded-xl transition-all shadow-sm active:scale-95 ${rsvpStatus === "참석" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>참석</button>
+                    <button onClick={() => setRsvpStatus("부분참석")} className={`flex-1 py-3 text-sm font-black rounded-xl transition-all shadow-sm active:scale-95 ${rsvpStatus === "부분참석" ? "bg-amber-500 text-white border-amber-500" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>부분참석</button>
+                    <button onClick={() => setRsvpStatus("불참")} className={`flex-1 py-3 text-sm font-black rounded-xl transition-all shadow-sm active:scale-95 ${rsvpStatus === "불참" ? "bg-rose-500 text-white border-rose-500" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>불참</button>
                   </div>
-
                   {(rsvpStatus === "참석" || rsvpStatus === "부분참석") && (
                     <div className="mb-4 animate-fade-in bg-orange-50/50 p-4 rounded-xl border border-orange-200/60 shadow-sm">
                       <label className="block text-xs font-black text-orange-800 mb-2">🍽️ 모임 식사 여부</label>
                       <div className="flex gap-2">
-                        <button onClick={() => setMealStatus("식사함")} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${mealStatus === "식사함" ? "bg-orange-500 text-white shadow-sm" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>
-                          🍚 밥 먹어요
-                        </button>
-                        <button onClick={() => setMealStatus("식사안함")} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${mealStatus === "식사안함" ? "bg-slate-700 text-white shadow-sm" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>
-                          🙅 안 먹어요
-                        </button>
+                        <button onClick={() => setMealStatus("식사함")} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${mealStatus === "식사함" ? "bg-orange-500 text-white shadow-sm" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>🍚 밥 먹어요</button>
+                        <button onClick={() => setMealStatus("식사안함")} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${mealStatus === "식사안함" ? "bg-slate-700 text-white shadow-sm" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"}`}>🙅 안 먹어요</button>
                       </div>
                     </div>
                   )}
-
                   {(rsvpStatus === "부분참석" || rsvpStatus === "불참") && (
                     <div className="mb-4 animate-fade-in">
                       <textarea value={rsvpReason} onChange={(e) => setRsvpReason(e.target.value)} placeholder={rsvpStatus === "부분참석" ? "예: 알바 근무로 인해 3시 이후에 참석 가능합니다. (참석 가능 시간을 꼭 적어주세요!)" : "조교 서류 기록을 위해 불참 사유를 구체적으로 작성해 주세요."} className="w-full rounded-xl border border-slate-200 p-3 h-24 text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />
                     </div>
                   )}
-
                   <button onClick={handleSubmitRsvp} className="w-full rounded-xl bg-slate-900 p-4 text-base font-black text-white shadow-md hover:bg-slate-800 transition-all mt-2 active:scale-[0.99]">
                     {rsvpStatus ? "참석 여부 저장하기" : "상태 항목을 선택해 주세요"}
                   </button>
                 </div>
               </div>
             )}
-
           </div>
         )}
       </div>
     </main>
   );
 }
-

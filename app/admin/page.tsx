@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { sortSurveysByDate } from "../../lib/survey-order";
 
 export default function AdminPage() {
   // 🛠️ 탭에 'baggage' 추가
@@ -191,7 +192,7 @@ export default function AdminPage() {
     }
   });
 
-  const activeAndFinalizedSurveys = surveys.filter(s => s.status === "active" || s.status === "finalized");
+  const activeAndFinalizedSurveys = sortSurveysByDate(surveys.filter(s => s.status === "active" || s.status === "finalized"));
   const archivedSurveys = surveys.filter(s => s.status === "archived");
 
   const usersByGeneration = registeredUsers.reduce((acc: Record<string, any[]>, user: any) => {

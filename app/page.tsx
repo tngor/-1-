@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { sortSurveysByDate } from "../lib/survey-order";
 
 export default function Home() {
   const [generation, setGeneration] = useState("");
@@ -42,7 +43,7 @@ export default function Home() {
 
   const fetchSurveys = async () => {
     const { data } = await supabase.from("surveys").select("*");
-    const fetchedSurveys = data || [];
+    const fetchedSurveys = sortSurveysByDate(data || []);
     setAllSurveys(fetchedSurveys);
 
     const savedUser = localStorage.getItem("missionUser");
@@ -359,8 +360,8 @@ export default function Home() {
                   <div className="mt-2 bg-amber-50/60 border border-amber-200/70 p-4 rounded-xl text-xs text-slate-700 space-y-2.5 animate-fade-in leading-relaxed font-semibold shadow-inner">
                     <div className="text-slate-900 font-black border-b border-amber-200 pb-1.5 mb-1.5 text-sm flex items-center gap-1">🙌 우리들의 약속 (선교 수칙)</div>
                     <p className="flex items-start gap-1"><span className="text-red-500">🚫</span> <span><strong>연애 금지:</strong> 선교가 완전히 끝날 때까지 팀원 내 연애는 절대 금지합니다.</span></p>
-                    <p className="flex items-start gap-1"><span className="text-amber-600">⏰</span> <span><strong>사전 연락:</strong> 불참하거나 늦게 참석할 경우, 최소 모임 3일 전에는 수혁에게 미리 전달해야 합니다.</span></p>
-                    <p className="flex items-start gap-1"><span className="text-blue-600">🏃‍♂️</span> <span><strong>코리안 타임 금지:</strong> 모든 모임은 늘 시작 5분 전에 도착해 기도로 준비합니다.</span></p>
+                    <p className="flex items-start gap-1"><span className="text-amber-600">⏰</span> <span><strong>사전 연락:</strong> 불참하거나 늦게 참석할 경우, 최소 모임 3일 전에는 조교에게 미리 전달해야 합니다.</span></p>
+                    <p className="flex items-start gap-1"><span className="text-blue-600">🏃‍♂️</span> <span><strong>영동 타임 금지:</strong> 모든 모임은 늘 시작 5분 전에 도착해 기도로 준비합니다.</span></p>
                     <p className="flex items-start gap-1"><span className="text-emerald-600">✅</span> <span><strong>공지 체크:</strong> 단톡방의 모든 카톡 공지는 확인 후 반드시 '체크 표시' 리액션을 남깁니다.</span></p>
                     <p className="flex items-start gap-1"><span className="text-purple-600">🧹</span> <span><strong>함께 동역:</strong> 모임이 끝난 후 장소 뒷정리와 청소는 다 같이 함께 합니다.</span></p>
                     <p className="flex items-start gap-1"><span className="text-indigo-600">📂</span> <span><strong>기록 보존:</strong> 팀별 회의가 끝난 후에는 구글 드라이브에 회의록을 꼭 작성합니다.</span></p>
@@ -614,7 +615,7 @@ export default function Home() {
                   )}
                   {(rsvpStatus === "부분참석" || rsvpStatus === "불참") && (
                     <div className="mb-4 animate-fade-in">
-                      <textarea value={rsvpReason} onChange={(e) => setRsvpReason(e.target.value)} placeholder={rsvpStatus === "부분참석" ? "예: 알바 근무로 인해 3시 이후에 참석 가능합니다. (참석 가능 시간을 꼭 적어주세요!)" : "조교 서류 기록을 위해 불참 사유를 구체적으로 작성해 주세요."} className="w-full rounded-xl border border-slate-200 p-3 h-24 text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />
+                      <textarea value={rsvpReason} onChange={(e) => setRsvpReason(e.target.value)} placeholder={rsvpStatus === "부분참석" ? "부분참석 사유를 자세히 작성하고, 몇 시부터 참석 가능한지 꼭 적어 주세요." : "조교 서류 기록을 위해 불참 사유를 구체적으로 작성해 주세요."} className="w-full rounded-xl border border-slate-200 p-3 h-24 text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:outline-none transition-all shadow-inner" />
                     </div>
                   )}
                   <button onClick={handleSubmitRsvp} className="w-full rounded-xl bg-slate-900 p-4 text-base font-black text-white shadow-md hover:bg-slate-800 transition-all mt-2 active:scale-[0.99]">

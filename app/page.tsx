@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { sortSurveysByDate } from "../lib/survey-order";
 
+import TeamSchedule from "./ministry/TeamSchedule";
+
 export default function Home() {
   const [generation, setGeneration] = useState("");
   const [name, setName] = useState("");
@@ -114,41 +116,32 @@ export default function Home() {
 
     try {
       setIsSubmitting(true);
-      const { data: existingUser } = await supabase
-        .from("users")
-        .select("*")
-        .eq("generation", cleanGen)
-        .eq("name", cleanName)
-        .maybeSingle();
-
-      if (existingUser) {
-        if (existingUser.pin !== cleanPin) {
-          setIsSubmitting(false);
-          return alert("비밀번호가 틀렸습니다! 다시 확인해주세요.");
-        }
-      } else {
-        if (!window.confirm(`처음 오셨군요! [${cleanGen}기] [${cleanName}]님, 비밀번호 [${cleanPin}](으)로 계정을 생성할까요?`)) {
-          setIsSubmitting(false);
-          return;
-        }
-        const { error } = await supabase.from("users").insert([{ team: "전체", generation: cleanGen, name: cleanName, pin: cleanPin }]);
-        if (error) {
-          setIsSubmitting(false);
-          return alert("계정 생성에 실패했습니다.");
-        }
-        alert("계정이 성공적으로 만들어졌습니다!");
+      const login = async (signup:boolean) => {
+        const response = await fetch("/api/ministry",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({operation:"login",generation:cleanGen,name:cleanName,pin:cleanPin,signup})});
+        return await response.json();
+      };
+      let result = await login(false);
+      if (result.missing) {
+        if (!window.confirm(`[${cleanGen}기] ${cleanName}님 계정을 생성할까요?`)) return;
+        result = await login(true);
       }
+      if (!result.ok) return alert(result.error || "입장하지 못했습니다. 다시 시도해 주세요.");
 
       localStorage.setItem("missionUser", JSON.stringify({ generation: cleanGen, name: cleanName, lastCategory: selectedCategory }));
       setEntered(true);
       fetchSurveys();
       checkBaggageStatus(cleanName);
+    } catch {
+      alert("연결 상태를 확인하고 다시 시도해 주세요.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await fetch("/api/ministry",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operation:"logout"})}); }
+    catch { return alert("로그아웃에 실패했습니다. 다시 시도해 주세요."); }
     localStorage.removeItem("missionUser");
     setEntered(false);
     setPin("");
@@ -339,7 +332,7 @@ export default function Home() {
               <div className="mb-4 space-y-3">
                 {generation.trim() === "45" && name.trim() === "강수혁" && (
                   <a href="/team-preview?view=leader" className="flex items-center justify-between rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-black text-blue-700 shadow-sm">
-                    <span>내 팀 관리 <small className="ml-1 font-medium">개인 체험</small></span><span>→</span>
+                    <span>팀 기능 미리보기 <small className="ml-1 font-medium">개인 체험</small></span><span>→</span>
                   </a>
                 )}
                 <button onClick={() => setViewMode("baggage")} className={`w-full p-4 rounded-2xl font-black text-sm flex justify-between items-center shadow-sm transition-all active:scale-[0.99] border ${isBaggageSubmitted ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' : 'bg-indigo-600 border-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700'}`}>
@@ -489,13 +482,14 @@ export default function Home() {
                   <select value={selectedCategory} onChange={handleCategoryChange} className="w-full rounded-xl border border-blue-200 p-3 text-base font-bold text-slate-900 bg-white shadow-sm focus:border-blue-500 focus:outline-none transition-all cursor-pointer">
                     <option value="">구분 항목을 선택하세요</option>
                     <option value="전체모임">📢 전체 모임 일정 전체보기</option>
+                    <option value="내 사역">내 사역 일정 보기</option>
                   </select>
                 </div>
 
-                {!selectedCategory ? (
+                {selectedCategory === "내 사역" ? <TeamSchedule name={name}/> : !selectedCategory ? (
                   <div className="text-center py-10 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
                     <span className="text-3xl">🗺️</span>
-                    <p className="text-slate-400 text-sm font-bold mt-2">상단에서 전체모임을 선택하시면<br/>일정이 나타납니다.</p>
+                    <p className="text-slate-400 text-sm font-bold mt-2">상단에서 모임을 선택하시면<br/>일정이 나타납니다.</p>
                   </div>
                 ) : (
                   <div className="space-y-5 animate-fade-in">

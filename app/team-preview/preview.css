@@ -29,3 +29,5 @@
 .teamPreview .calendar p{font-size:13px}
 .teamPreview .row button{font-size:14px}
 .teamPreview button:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+
+.teamPreview.ministryPanel{min-height:0;padding:16px;border-radius:16px;background:#f8fafc}

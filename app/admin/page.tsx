@@ -38,7 +38,7 @@ export default function AdminPage() {
     setSurveyResponses(srData || []);
     const { data: rsvpData } = await supabase.from("rsvp_responses").select("*");
     setRsvpResponses(rsvpData || []);
-    const { data: uData } = await supabase.from("users").select("*");
+    const { data: uData } = await supabase.from("users").select("id,name,generation,team");
     setRegisteredUsers(uData || []);
     
     // 🎒 물품 현황 불러오기

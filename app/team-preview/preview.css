@@ -1,0 +1,31 @@
+.teamPreview{min-height:100vh;background:#f8fafc;color:#182c3a;font-family:system-ui,sans-serif;padding:30px 16px 64px}
+.teamPreview .wrap{max-width:630px;margin:auto;background:white;border-radius:24px;padding:clamp(14px,4vw,30px);box-shadow:0 8px 32px #0f172a0c}
+.teamPreview header{padding:24px;background:#eff6ff;border-radius:18px;color:#172554;border:1px solid #dbeafe}
+.teamPreview h1{font-size:30px;font-weight:800;margin:5px 0 12px}
+.teamPreview h2{font-size:21px;font-weight:750;margin:4px 0 12px}
+.teamPreview p{line-height:1.65;margin:8px 0}
+.teamPreview nav,.teamPreview .row{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:10px 0}
+.teamPreview nav button{flex:1}
+.teamPreview .panel{background:white;border:1px solid #d7e2e6;border-radius:16px;padding:18px;margin-top:12px}
+.teamPreview button,.teamPreview select,.teamPreview input:not([type=checkbox],[type=radio]){background:white;color:#233d47;border:1px solid #b8c9d0;border-radius:9px;padding:9px 12px;font:inherit}
+.teamPreview button,.teamPreview summary{cursor:pointer;font-weight:650}
+.teamPreview button[aria-pressed=true],.teamPreview .primary{background:#2563eb;color:white;border-color:#2563eb}
+.teamPreview button:disabled{opacity:.45;cursor:default}
+.teamPreview label{display:grid;gap:4px;margin:10px 0;font-size:14px}
+.teamPreview small{color:#1d4ed8;font-weight:700}
+.teamPreview input[type=radio],.teamPreview input[type=checkbox]{accent-color:#2563eb}
+.teamPreview .result,.teamPreview .check{display:flex;align-items:center;gap:10px}
+.teamPreview .result{border:1px solid #d7e2e6;padding:10px;border-radius:8px}
+.teamPreview .result b{margin-left:auto}
+.teamPreview .assignment{margin-top:14px;border-top:1px solid #d7e2e6;padding-top:12px}
+.teamPreview [role=status]{margin-left:8px}
+
+.teamPreview .calendar,.teamPreview .voteDay{margin:16px 0;padding:12px;border:1px solid #dbeafe;border-radius:14px;background:#f8faff}
+.teamPreview legend{padding:0 5px;font-size:14px;font-weight:700;color:#334155}
+.teamPreview .month{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.teamPreview .days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
+.teamPreview .days button{padding:7px 0;min-height:36px}
+.teamPreview .days small{color:#64748b}
+.teamPreview .calendar p{font-size:13px}
+.teamPreview .row button{font-size:14px}
+.teamPreview button:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}

@@ -337,6 +337,11 @@ export default function Home() {
 
             {viewMode === "list" && (
               <div className="mb-4 space-y-3">
+                {generation.trim() === "45" && name.trim() === "강수혁" && (
+                  <a href="/team-preview?view=leader" className="flex items-center justify-between rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-black text-blue-700 shadow-sm">
+                    <span>내 팀 관리 <small className="ml-1 font-medium">개인 체험</small></span><span>→</span>
+                  </a>
+                )}
                 <button onClick={() => setViewMode("baggage")} className={`w-full p-4 rounded-2xl font-black text-sm flex justify-between items-center shadow-sm transition-all active:scale-[0.99] border ${isBaggageSubmitted ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' : 'bg-indigo-600 border-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700'}`}>
                   <div className="flex items-center gap-2">
                     <span className="text-xl">🎒</span>

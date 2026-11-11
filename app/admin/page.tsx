@@ -3,10 +3,14 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { sortSurveysByDate } from "../../lib/survey-order";
+import { groupArchivedSurveys } from "../../lib/archive-groups";
+import { cleanAttendanceReason } from "../../lib/attendance-share";
+import AttendanceShare from "./AttendanceShare";
+import Workbench from "../ministry-review/Workbench";
 
 export default function AdminPage() {
   // 🛠️ 탭에 'baggage' 추가
-  const [activeTab, setActiveTab] = useState<"status" | "users" | "create" | "archived" | "baggage">("status");
+  const [activeTab, setActiveTab] = useState<"status" | "users" | "create" | "archived" | "baggage" | "teams">("status");
   
   const [surveys, setSurveys] = useState<any[]>([]);
   const [surveyResponses, setSurveyResponses] = useState<any[]>([]);
@@ -15,6 +19,9 @@ export default function AdminPage() {
   const [baggages, setBaggages] = useState<any[]>([]); // 🎒 물품 데이터
   
   const [selectedSurvey, setSelectedSurvey] = useState<any>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [dataError, setDataError] = useState("");
+  const [dataReady, setDataReady] = useState(false);
 
   const [newTitle, setNewTitle] = useState("");
   const [tempDate, setTempDate] = useState(""); 
@@ -32,18 +39,32 @@ export default function AdminPage() {
   }, []);
 
   const fetchData = async () => {
-    const { data: sData } = await supabase.from("surveys").select("*").order("created_at", { ascending: false });
-    setSurveys(sData || []);
-    const { data: srData } = await supabase.from("survey_responses").select("*");
-    setSurveyResponses(srData || []);
-    const { data: rsvpData } = await supabase.from("rsvp_responses").select("*");
-    setRsvpResponses(rsvpData || []);
-    const { data: uData } = await supabase.from("users").select("id,name,generation,team");
-    setRegisteredUsers(uData || []);
-    
-    // 🎒 물품 현황 불러오기
-    const { data: bData } = await supabase.from("mission_baggage").select("*");
-    setBaggages(bData || []);
+    setIsRefreshing(true);
+    setDataError("");
+    setDataReady(false);
+    try {
+      const [sData, srData, rsvpData, uData, bData] = await Promise.all([
+        supabase.from("surveys").select("*").order("created_at", { ascending: false }),
+        supabase.from("survey_responses").select("*"),
+        supabase.from("rsvp_responses").select("*"),
+        supabase.from("users").select("id,name,generation,team"),
+        supabase.from("mission_baggage").select("*"),
+      ]);
+      if ([sData, srData, rsvpData, uData, bData].some(result => result.error)) {
+        throw new Error("현황을 불러오지 못했습니다. 다시 새로고침해 주세요.");
+      }
+      setSurveys(sData.data || []);
+      setSurveyResponses(srData.data || []);
+      setRsvpResponses(rsvpData.data || []);
+      setRegisteredUsers(uData.data || []);
+      setBaggages(bData.data || []);
+      setSelectedSurvey((current: any) => current ? sData.data?.find(survey => survey.id === current.id) ?? null : null);
+      setDataReady(true);
+    } catch {
+      setDataError("현황을 불러오지 못했습니다. 다시 새로고침해 주세요.");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleAddDate = () => {
@@ -178,10 +199,7 @@ export default function AdminPage() {
     if(reason?.includes("[식사안함]")) return <span className="bg-slate-200 text-slate-600 border border-slate-300 px-1.5 py-0.5 rounded text-[10px] ml-1">🙅 식사X</span>;
     return null;
   };
-  const cleanReasonText = (reason: string) => {
-    if(!reason) return "";
-    return reason.replace("[식사함] ", "").replace("[식사안함] ", "");
-  };
+  const cleanReasonText = cleanAttendanceReason;
 
   const unresponsiveForSelected = registeredUsers.filter(user => {
     if (!selectedSurvey) return false;
@@ -193,7 +211,7 @@ export default function AdminPage() {
   });
 
   const activeAndFinalizedSurveys = sortSurveysByDate(surveys.filter(s => s.status === "active" || s.status === "finalized"));
-  const archivedSurveys = surveys.filter(s => s.status === "archived");
+  const archivedGroups = groupArchivedSurveys(surveys.filter(s => s.status === "archived"));
 
   const usersByGeneration = registeredUsers.reduce((acc: Record<string, any[]>, user: any) => {
     const gen = user.generation;
@@ -239,6 +257,8 @@ export default function AdminPage() {
           </button>
         </div>
 
+        {<button onClick={() => { setActiveTab("teams"); setSelectedSurvey(null); }} className={`mb-4 w-full rounded-xl border px-4 py-3 text-sm font-bold ${activeTab === "teams" ? "border-blue-600 bg-blue-600 text-white" : "border-blue-200 bg-blue-50 text-blue-700"}`}>사역팀 현황</button>}
+
         <div className="space-y-2.5 overflow-y-auto flex-1 pr-1.5">
           {activeTab === "status" && (
             activeAndFinalizedSurveys.length === 0 ? (
@@ -257,19 +277,28 @@ export default function AdminPage() {
             )
           )}
           {activeTab === "archived" && (
-            archivedSurveys.length === 0 ? (
+            archivedGroups.length === 0 ? (
               <p className="text-xs text-slate-400 font-medium text-center pt-8">보관된 일정이 없습니다.</p>
             ) : (
-              archivedSurveys.map((survey) => (
-                <button key={survey.id} onClick={() => { setSelectedSurvey(survey); setIsFinalizing(false); }} className={`w-full text-left p-3.5 rounded-xl border transition-all active:scale-[0.985] ${selectedSurvey?.id === survey.id ? "bg-slate-700 text-white border-slate-700 shadow-md" : "bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100/70"}`}>
-                  <div className="font-bold text-base mb-1.5 leading-snug text-slate-500">{survey.title}</div>
-                  <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-bold">📂 숨김 보관됨</span>
-                </button>
+              archivedGroups.map(group => (
+                <details key={group.key} className="rounded-xl border border-slate-200 bg-slate-50">
+                  <summary className="cursor-pointer p-3.5 text-sm font-black text-slate-800">
+                    📁 {group.label} <span className="ml-1 text-xs font-medium text-slate-500">({group.surveys.length}개)</span>
+                  </summary>
+                  <div className="space-y-2 px-2 pb-2">
+                    {group.surveys.map(survey => (
+                      <button key={survey.id} onClick={() => { setSelectedSurvey(survey); setIsFinalizing(false); }} className={`w-full rounded-xl border p-3.5 text-left transition-all ${selectedSurvey?.id === survey.id ? "border-slate-700 bg-slate-700 text-white shadow-md" : "border-slate-200 bg-white text-slate-800 hover:bg-slate-100"}`}>
+                        <div className="mb-1.5 text-sm font-bold leading-snug">{survey.title}</div>
+                        <span className={`text-[10px] font-bold ${selectedSurvey?.id === survey.id ? "text-slate-200" : "text-slate-500"}`}>숨김 보관됨</span>
+                      </button>
+                    ))}
+                  </div>
+                </details>
               ))
             )
           )}
           {/* 다른 탭 선택 시 왼쪽 패널 설명 */}
-          {(activeTab === "users" || activeTab === "create" || activeTab === "baggage") && (
+          {(activeTab === "users" || activeTab === "create" || activeTab === "baggage" || activeTab === "teams") && (
             <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center opacity-70 pb-10">
               <span className="text-4xl mb-3">{activeTab === "baggage" ? "🎒" : activeTab === "users" ? "👥" : "✨"}</span>
               <p className="text-xs font-bold leading-relaxed px-4">
@@ -281,7 +310,14 @@ export default function AdminPage() {
       </div>
 
       <div className="w-2/3 bg-white p-7 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-200/60 overflow-y-auto h-[calc(100vh-3rem)]">
+        {activeTab !== "teams" && <div className="mb-4 flex items-center justify-end gap-3">
+          {dataError && <p role="alert" className="text-xs font-bold text-red-600">{dataError}</p>}
+          <button type="button" onClick={fetchData} disabled={isRefreshing} className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 disabled:opacity-50">{isRefreshing ? "불러오는 중…" : "현황 새로고침"}</button>
+        </div>}
+
         
+        {activeTab === "teams" && <Workbench admin />}
+
         {/* 🎒 물품 탭 (새로 추가됨) */}
         {activeTab === "baggage" && (
           <div className="animate-fade-in space-y-6">
@@ -449,13 +485,17 @@ export default function AdminPage() {
                   <h2 className="text-2xl font-black text-slate-900 leading-tight">{selectedSurvey.title}</h2>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => handleShareToKakao(selectedSurvey)} className="bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-black text-xs py-2 px-3 rounded-xl shadow-sm">💬 카톡 복사</button>
+                  <button onClick={() => handleShareToKakao(selectedSurvey)} className="bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-black text-xs py-2 px-3 rounded-xl shadow-sm">💬 공지 문구 복사</button>
                   {selectedSurvey.status !== "archived" && (
                     <button onClick={() => handleArchiveSurvey(selectedSurvey.id)} className="bg-slate-100 text-slate-700 text-xs py-2 px-3 rounded-xl font-bold border">📥 숨김 보관</button>
                   )}
                   <button onClick={() => handleDeleteSurvey(selectedSurvey.id)} className="text-red-500 font-extrabold hover:bg-red-50 px-2.5 py-1.5 rounded-xl text-xs">🗑️ 영구삭제</button>
                 </div>
               </div>
+
+              {dataReady && selectedSurvey.status !== "active" && selectedSurvey.final_schedule && (
+                <AttendanceShare key={selectedSurvey.id} title={selectedSurvey.title} responses={currentRsvpResponses} members={registeredUsers} />
+              )}
 
               {isFinalizing ? (
                 <div className="bg-amber-50/70 p-5 rounded-2xl border border-amber-200 shadow-sm space-y-4 animate-fade-in">
@@ -606,5 +646,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
-

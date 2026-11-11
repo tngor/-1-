@@ -1,0 +1,75 @@
+.ministryWork{color:#0f172a;font-family:inherit;line-height:1.6;text-align:left}
+.ministryWork *{box-sizing:border-box}
+.ministryWork fieldset{border:0;padding:0;min-width:0}
+.ministryWork h2{font-size:22px;font-weight:850;margin:0 0 8px;line-height:1.4}
+.ministryWork h3{font-size:16px;font-weight:800;margin:0 0 10px}
+.ministryWork h4{font-size:14px;font-weight:750;margin:0 0 10px}
+.ministryWork p{font-size:13px;margin:8px 0;white-space:pre-line;overflow-wrap:anywhere}
+.ministryWork label{display:grid;gap:6px;font-size:13px;font-weight:700;margin:14px 0}
+.ministryWork input:not([type=checkbox],[type=radio]),.ministryWork select,.ministryWork textarea{width:100%;min-width:0;padding:11px 12px;border:1px solid #cbd5e1;border-radius:12px;background:white;color:#0f172a;font:inherit}
+.ministryWork textarea{resize:vertical;min-height:85px;font-weight:400;line-height:1.6}
+.ministryWork button{font:inherit;font-size:12px;font-weight:750;padding:10px 13px;border:1px solid #cbd5e1;border-radius:12px;background:white;color:#334155;cursor:pointer}
+.ministryWork button:hover{border-color:#60a5fa;background:#eff6ff}
+.ministryWork button:disabled,.ministryWork fieldset:disabled button{opacity:.5;cursor:default}
+.ministryWork :focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+.ministryWork .work-primary,.ministryWork button[aria-pressed=true]{background:#2563eb;color:white;border-color:#2563eb}
+.ministryWork .work-wide{width:100%;margin:12px 0}
+.ministryWork .work-trial{background:#fffbeb;border:1px solid #fde68a;border-radius:14px;padding:14px;margin-bottom:20px;font-size:12px}
+.ministryWork .work-trial p{font-size:12px;color:#78521a}
+.ministryWork a{color:#1d4ed8;text-decoration:underline;font-size:12px}
+.ministryWork .work-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:16px 0}
+.ministryWork .work-heading>button{flex-shrink:0}
+.ministryWork .work-muted{color:#64748b;font-size:12px}
+.ministryWork .work-toolbar{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:16px 0}
+.ministryWork .work-toolbar label{flex:1;min-width:180px;margin:0}
+.ministryWork .work-actions,.ministryWork .work-chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.ministryWork .work-section{margin:24px 0}
+.ministryWork .work-section>h3{font-size:13px;color:#64748b}
+.ministryWork .work-meeting{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;padding:16px;margin:10px 0;gap:12px;border:1px solid #e2e8f0;box-shadow:0 2px 5px #0f172a06}
+.ministryWork .work-meeting>div{min-width:0;flex:1}
+.ministryWork .work-meeting h3{margin:8px 0 4px;overflow-wrap:anywhere}
+.ministryWork .work-meeting small{font-size:11px;color:#64748b}
+.ministryWork .work-tag,.ministryWork .work-badge{display:inline-block;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:7px;padding:3px 7px;font-size:11px;font-weight:750}
+.ministryWork .work-tag.confirmed{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
+.ministryWork .work-tag.cancelled,.ministryWork .work-tag.archived{background:#f1f5f9;color:#64748b;border-color:#e2e8f0}
+.ministryWork .work-go{font-size:11px;color:white;background:#2563eb;border-radius:8px;padding:8px;flex-shrink:0}
+.ministryWork .work-go.confirmed{background:#059669}
+.ministryWork .work-empty{border:1px dashed #cbd5e1;border-radius:12px;padding:20px;text-align:center;color:#94a3b8;background:#f8fafc}
+.ministryWork .work-detail-head{padding:20px 0;border-bottom:1px solid #e2e8f0;margin-bottom:20px}
+.ministryWork .work-detail-head h2{margin-top:10px}
+.ministryWork summary{cursor:pointer;font-size:12px;font-weight:700;margin:12px 0}
+.ministryWork .work-form,.ministryWork .work-manager{margin:20px 0;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px}
+.ministryWork .work-notice{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:16px;padding:18px;margin:20px 0}
+.ministryWork dl{font-size:13px;margin:0}
+.ministryWork dt{color:#64748b;font-size:11px;margin-top:12px}
+.ministryWork dd{margin:2px 0;white-space:pre-line;overflow-wrap:anywhere;font-weight:650}
+.ministryWork .work-success{color:#047857}
+.ministryWork .work-warning{color:#92400e;background:#fffbeb;padding:10px;border-radius:9px}
+.ministryWork .work-error{color:#be123c;background:#fff1f2;padding:12px;border-radius:10px}
+.ministryWork .work-day{padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;margin:14px 0}
+.ministryWork .work-slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ministryWork .work-check{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ministryWork input[type=checkbox],.ministryWork input[type=radio]{accent-color:#2563eb;width:17px;height:17px;flex-shrink:0}
+.ministryWork .work-row{display:flex;gap:12px}
+.ministryWork .work-row>label{flex:1;min-width:0}
+.ministryWork .calendar{padding:12px;border:1px solid #dbeafe;border-radius:12px;background:white;margin:16px 0}
+.ministryWork .calendar legend{font-size:12px;font-weight:750}
+.ministryWork .month{display:flex;align-items:center;justify-content:space-between;margin:8px 0}
+.ministryWork .days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
+.ministryWork .days button{padding:7px 0}
+.ministryWork .work-candidates{margin-top:16px}
+.ministryWork .work-candidate{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;background:white;border-bottom:1px solid #e2e8f0;font-size:12px}
+.ministryWork .work-candidate small{color:#64748b}
+.ministryWork .work-result{border:1px solid #dbeafe;background:white;border-radius:12px;padding:12px;margin:12px 0}
+.ministryWork .work-result label{margin:0}
+.ministryWork .work-result strong{font-size:12px}
+.ministryWork .work-table-scroll{overflow-x:auto}
+.ministryWork table{width:100%;border-collapse:collapse;font-size:12px;margin:14px 0;text-align:left}
+.ministryWork th,.ministryWork td{padding:10px 8px;border-bottom:1px solid #e2e8f0;vertical-align:top;overflow-wrap:anywhere}
+.ministryWork th{white-space:nowrap;background:#eff6ff}
+.ministryWork .work-bottom{border-top:1px solid #e2e8f0;padding-top:16px;margin-top:24px}
+.ministryWork .work-team-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px;margin:16px 0}
+.ministryWork .work-team{padding:16px;border:1px solid #e2e8f0;border-radius:16px;background:#f8fafc}
+.ministryWork .work-team small{font-size:11px;color:#64748b}
+.ministryWork .work-team-poll{width:100%;display:flex;flex-direction:column;align-items:flex-start;margin:8px 0;gap:5px;text-align:left}
+@media(max-width:480px){.ministryWork .work-go{max-width:65px}.ministryWork .work-meeting{padding:12px}.ministryWork .work-form,.ministryWork .work-manager{padding:12px}.ministryWork .work-heading h2{font-size:20px}}

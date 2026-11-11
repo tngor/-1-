@@ -6,6 +6,9 @@ import { sortSurveysByDate } from "../lib/survey-order";
 
 import TeamSchedule from "./ministry/TeamSchedule";
 
+// 사용자 물품 조사는 잠시 숨깁니다. 기존 제출 내역과 관리자 조회는 유지합니다.
+const SHOW_BAGGAGE_FORM = false;
+
 export default function Home() {
   const [generation, setGeneration] = useState("");
   const [name, setName] = useState("");
@@ -58,7 +61,7 @@ export default function Home() {
         setSelectedCategory(parsed.lastCategory);
         setupMySurveys(parsed.lastCategory, fetchedSurveys);
       }
-      checkBaggageStatus(parsed.name); 
+      if (SHOW_BAGGAGE_FORM) checkBaggageStatus(parsed.name);
     }
   };
 
@@ -131,7 +134,7 @@ export default function Home() {
       localStorage.setItem("missionUser", JSON.stringify({ generation: cleanGen, name: cleanName, lastCategory: selectedCategory }));
       setEntered(true);
       fetchSurveys();
-      checkBaggageStatus(cleanName);
+      if (SHOW_BAGGAGE_FORM) checkBaggageStatus(cleanName);
     } catch {
       alert("연결 상태를 확인하고 다시 시도해 주세요.");
     } finally {
@@ -330,12 +333,7 @@ export default function Home() {
 
             {viewMode === "list" && (
               <div className="mb-4 space-y-3">
-                {generation.trim() === "45" && name.trim() === "강수혁" && (
-                  <a href="/team-preview?view=leader" className="flex items-center justify-between rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-black text-blue-700 shadow-sm">
-                    <span>팀 기능 미리보기 <small className="ml-1 font-medium">개인 체험</small></span><span>→</span>
-                  </a>
-                )}
-                <button onClick={() => setViewMode("baggage")} className={`w-full p-4 rounded-2xl font-black text-sm flex justify-between items-center shadow-sm transition-all active:scale-[0.99] border ${isBaggageSubmitted ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' : 'bg-indigo-600 border-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700'}`}>
+                {SHOW_BAGGAGE_FORM && <button onClick={() => setViewMode("baggage")} className={`w-full p-4 rounded-2xl font-black text-sm flex justify-between items-center shadow-sm transition-all active:scale-[0.99] border ${isBaggageSubmitted ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' : 'bg-indigo-600 border-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700'}`}>
                   <div className="flex items-center gap-2">
                     <span className="text-xl">🎒</span>
                     <div className="text-left">
@@ -348,7 +346,7 @@ export default function Home() {
                     </div>
                   </div>
                   <span>→</span>
-                </button>
+                </button>}
 
                 <button onClick={() => setShowRules(!showRules)} className="w-full bg-slate-900 text-white p-3 rounded-xl font-bold text-xs flex justify-between items-center shadow transition-all active:scale-[0.99]">
                   <span className="flex items-center gap-1.5">📜 피지 선교 준비 단원 수칙 보기</span>
@@ -370,7 +368,7 @@ export default function Home() {
             )}
 
             {/* 🎒 물품 입력 뷰 */}
-            {viewMode === "baggage" && (
+            {SHOW_BAGGAGE_FORM && viewMode === "baggage" && (
               <div className="animate-fade-in space-y-6">
                 <div className="space-y-1.5">
                   <span className="text-[10px] font-black px-2.5 py-1 rounded-md border bg-indigo-50 text-indigo-600 border-indigo-100">
@@ -486,7 +484,7 @@ export default function Home() {
                   </select>
                 </div>
 
-                {selectedCategory === "내 사역" ? <TeamSchedule name={name}/> : !selectedCategory ? (
+                {selectedCategory === "내 사역" ? <TeamSchedule /> : !selectedCategory ? (
                   <div className="text-center py-10 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
                     <span className="text-3xl">🗺️</span>
                     <p className="text-slate-400 text-sm font-bold mt-2">상단에서 모임을 선택하시면<br/>일정이 나타납니다.</p>

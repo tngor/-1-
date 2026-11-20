@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 // ✅ 1. Supabase 연결 도구를 불러옵니다. (폴더 경로에 맞게 점 3개 ../../../ 사용)
-import { supabase } from "../../../lib/supabase";
+import { overallSchedule } from "../../../lib/overall-schedule";
 
 export default function CreatePage() {
   const [title, setTitle] = useState("");
@@ -58,16 +58,8 @@ export default function CreatePage() {
     };
 
     // ✅ 4. Supabase의 'surveys' 표에 데이터를 집어넣습니다(insert).
-    const { error } = await supabase
-      .from("surveys")
-      .insert([newSurvey]);
-
-    // 에러가 났을 때의 처리
-    if (error) {
-      console.error("DB 저장 에러:", error.message);
-      alert("일정 생성에 실패했습니다. 콘솔창을 확인해주세요.");
-      return;
-    }
+    const { error } = await overallSchedule("adminCreate", newSurvey);
+    if (error) return alert(error.message);
 
     // 성공 시 화면 초기화
     setPreview(newSurvey);

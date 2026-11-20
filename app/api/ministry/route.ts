@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "../../../lib/supabase";
 
-const cookieName = "mission_member_session";
-const cookieOptions = {httpOnly:true, sameSite:"lax" as const, secure:process.env.NODE_ENV==="production",path:"/api/ministry",maxAge:14*86400};
+import { missionCookie, legacyMissionCookie } from "../../../lib/mission-session";
+const cookieOptions = {httpOnly:true, sameSite:"lax" as const, secure:process.env.NODE_ENV==="production",path:"/",maxAge:14*86400};
+function clearLegacyCookie(response: NextResponse) {
+  response.cookies.set(legacyMissionCookie, "", { path: "/api/ministry", maxAge: 0 });
+}
+
+const overallActions = ["list", "vote", "rsvpRead", "rsvp", "baggageRead", "baggageSave", "adminRead", "adminCreate", "adminFinalize", "adminArchive", "adminDelete"];
+
 const reply = (data: unknown, status = 200) => NextResponse.json(data, {status, headers: {"Cache-Control":"private, no-store"}});
 
 export async function POST(request: NextRequest) {
@@ -18,10 +24,22 @@ export async function POST(request: NextRequest) {
       if (error) return reply({error:"로그인 정보를 확인할 수 없습니다."},503);
       if (!data?.session) return reply(data,data?.missing ? 200 : 401);
       const response = reply({ok:true});
-      response.cookies.set(cookieName,data.session,cookieOptions);
+      response.cookies.set(missionCookie,data.session,cookieOptions);
+      clearLegacyCookie(response);
       return response;
     }
-    const token=request.cookies.get(cookieName)?.value ?? "";
+    const token=request.cookies.get(missionCookie)?.value ?? request.cookies.get(legacyMissionCookie)?.value ?? "";
+    if (input.operation === "overall") {
+      if (!token) return reply({error:"다시 로그인해 주세요."},401);
+      if (!overallActions.includes(input.action)) return reply({error:"지원하지 않는 작업입니다."},400);
+      const {data,error} = await supabase.rpc("mission_overall", {
+        token, operation: input.action, payload: input.payload ?? {},
+      });
+      if (error) return reply({error:error.code === "P0001" ? error.message : "일정을 처리하지 못했습니다."}, error.code === "P0001" ? 400 : 503);
+      if (data?.expired) return reply({error:"다시 로그인해 주세요."},401);
+      if (data?.forbidden) return reply({error:"관리자 계정으로만 이용할 수 있습니다."},403);
+      return reply(data);
+    }
     if (input.operation === "schedule") {
       if (!token) return reply({expired: true}, 401);
       const allowed = ["read", "create", "createNotice", "editCandidates", "vote", "confirm", "editNotice", "rsvp", "delete", "cancel", "archive"];
@@ -41,11 +59,15 @@ export async function POST(request: NextRequest) {
     if (error) return reply({error:error.code==="P0001"?error.message:"일정을 저장할 수 없습니다. 다시 확인해 주세요."},400);
     if (input.operation==="logout" || data?.expired) {
       const response=reply(data,data?.expired?401:200);
-      response.cookies.set(cookieName,"",{path:"/api/ministry",maxAge:0});
+      response.cookies.set(missionCookie,"",{path:"/",maxAge:0});
+      clearLegacyCookie(response);
       return response;
     }
     const response=reply(data);
-    if (input.operation==="session") response.cookies.set(cookieName,token,cookieOptions);
+    if (input.operation==="session") {
+      response.cookies.set(missionCookie,token,cookieOptions);
+      clearLegacyCookie(response);
+    }
     return response;
   } catch { return reply({error:"요청을 처리할 수 없습니다."},400); }
 }

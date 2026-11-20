@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { overallSchedule, type OverallAdminData } from "../../lib/overall-schedule";
 import { sortSurveysByDate } from "../../lib/survey-order";
 import { groupArchivedSurveys } from "../../lib/archive-groups";
 import { cleanAttendanceReason } from "../../lib/attendance-share";
@@ -43,25 +43,17 @@ export default function AdminPage() {
     setDataError("");
     setDataReady(false);
     try {
-      const [sData, srData, rsvpData, uData, bData] = await Promise.all([
-        supabase.from("surveys").select("*").order("created_at", { ascending: false }),
-        supabase.from("survey_responses").select("*"),
-        supabase.from("rsvp_responses").select("*"),
-        supabase.from("users").select("id,name,generation,team"),
-        supabase.from("mission_baggage").select("*"),
-      ]);
-      if ([sData, srData, rsvpData, uData, bData].some(result => result.error)) {
-        throw new Error("현황을 불러오지 못했습니다. 다시 새로고침해 주세요.");
-      }
-      setSurveys(sData.data || []);
-      setSurveyResponses(srData.data || []);
-      setRsvpResponses(rsvpData.data || []);
-      setRegisteredUsers(uData.data || []);
-      setBaggages(bData.data || []);
-      setSelectedSurvey((current: any) => current ? sData.data?.find(survey => survey.id === current.id) ?? null : null);
+      const { data, error } = await overallSchedule<OverallAdminData>("adminRead");
+      if (error || !data) throw new Error(error?.message);
+      setSurveys(data.surveys);
+      setSurveyResponses(data.surveyResponses);
+      setRsvpResponses(data.rsvpResponses);
+      setRegisteredUsers(data.users);
+      setBaggages(data.baggage);
+      setSelectedSurvey((current: any) => current ? data.surveys.find(survey => survey.id === current.id) ?? null : null);
       setDataReady(true);
-    } catch {
-      setDataError("현황을 불러오지 못했습니다. 다시 새로고침해 주세요.");
+    } catch (error) {
+      setDataError(error instanceof Error && error.message ? error.message : "현황을 불러오지 못했습니다.");
     } finally {
       setIsRefreshing(false);
     }
@@ -115,7 +107,6 @@ export default function AdminPage() {
     });
 
     const newSurveyData = {
-      id: crypto.randomUUID(), 
       title: newTitle,
       meeting_type: "전체모임",
       target_team: "전체",
@@ -123,7 +114,7 @@ export default function AdminPage() {
       dates: datesPayload,
     };
 
-    const { error } = await supabase.from("surveys").insert([newSurveyData]);
+    const { error } = await overallSchedule("adminCreate", newSurveyData);
     if (error) return alert("생성 실패: " + error.message);
     
     alert("📢 새로운 투표가 생성되었습니다!");
@@ -143,7 +134,7 @@ export default function AdminPage() {
   const handleFinalizeSurvey = async () => {
     if (!finalTime || !finalLocation) return alert("확정된 시간과 장소를 입력해주세요.");
     const finalSchedule = { time: finalTime, location: finalLocation, memo: finalMemo };
-    const { error } = await supabase.from("surveys").update({ status: "finalized", final_schedule: finalSchedule }).eq("id", selectedSurvey.id);
+    const { error } = await overallSchedule("adminFinalize", { id: selectedSurvey.id, ...finalSchedule });
     if (error) return alert("저장 실패: " + error.message);
 
     alert("공지 내용이 성공적으로 저장되었습니다! ✅");
@@ -155,7 +146,8 @@ export default function AdminPage() {
 
   const handleArchiveSurvey = async (id: string) => {
     if (!window.confirm("이 일정을 조원 화면에서 숨기고 과거 보관함으로 이동하시겠습니까?")) return;
-    await supabase.from("surveys").update({ status: "archived" }).eq("id", id);
+    const { error } = await overallSchedule("adminArchive", { id });
+    if (error) return alert(error.message);
     alert("숨김 처리되었습니다.");
     setSelectedSurvey(null);
     fetchData();
@@ -163,7 +155,8 @@ export default function AdminPage() {
 
   const handleDeleteSurvey = async (id: string) => {
     if (!window.confirm("정말 영구 삭제하시겠습니까?")) return;
-    await supabase.from("surveys").delete().eq("id", id);
+    const { error } = await overallSchedule("adminDelete", { id });
+    if (error) return alert(error.message);
     alert("삭제되었습니다.");
     setSelectedSurvey(null);
     fetchData();

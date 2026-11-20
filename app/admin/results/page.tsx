@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 // ✅ 1. Supabase 연결 도구 불러오기
-import { supabase } from "../../../lib/supabase";
+import { overallSchedule, type OverallAdminData } from "../../../lib/overall-schedule";
 
 export default function ResultsPage() {
   const [allSurveys, setAllSurveys] = useState<any[]>([]);
@@ -19,11 +19,10 @@ export default function ResultsPage() {
   // ✅ 2. 처음에 DB에서 전체 일정과 전체 응답을 모두 가져옵니다.
   useEffect(() => {
     const fetchData = async () => {
-      const { data: surveysData } = await supabase.from("surveys").select("*");
-      const { data: responsesData } = await supabase.from("survey_responses").select("*");
-
-      if (surveysData) setAllSurveys(surveysData);
-      if (responsesData) setAllResponses(responsesData);
+      const { data, error } = await overallSchedule<OverallAdminData>("adminRead");
+      if (error || !data) return alert(error?.message || "현황을 불러오지 못했습니다.");
+      setAllSurveys(data.surveys);
+      setAllResponses(data.surveyResponses);
     };
 
     fetchData();
@@ -83,16 +82,11 @@ export default function ResultsPage() {
     };
 
     // Supabase DB 업데이트 실행 (.eq를 써서 선택한 ID의 데이터만 수정합니다)
-    const { error } = await supabase
-      .from("surveys")
-      .update(updateData)
-      .eq("id", selectedSurveyId);
-
-    if (error) {
-      console.error("공지 업데이트 에러:", error.message);
-      alert("공지 확정에 실패했습니다.");
-      return;
-    }
+    const { error } = await overallSchedule("adminFinalize", {
+      id: selectedSurveyId,
+      ...updateData.final_schedule,
+    });
+    if (error) return alert(error.message);
 
     // 성공하면 화면의 목록도 최신 상태로 바꿔줍니다.
     const updatedSurveys = allSurveys.map((survey) => {

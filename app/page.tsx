@@ -1,13 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { overallSchedule } from "../lib/overall-schedule";
 import { sortSurveysByDate } from "../lib/survey-order";
 
 import TeamSchedule from "./ministry/TeamSchedule";
 
 // 사용자 물품 조사는 잠시 숨깁니다. 기존 제출 내역과 관리자 조회는 유지합니다.
 const SHOW_BAGGAGE_FORM = false;
+
+function returnToAdmin() {
+  if (new URLSearchParams(window.location.search).get("admin") !== "1") return false;
+  window.location.replace("/admin");
+  return true;
+}
 
 export default function Home() {
   const [generation, setGeneration] = useState("");
@@ -67,17 +73,19 @@ export default function Home() {
         if (!response.ok) throw new Error();
         const account = await response.json();
         if (!current) return;
+        if (returnToAdmin()) return;
         const category = previous?.name === account.name && String(previous.generation) === account.generation ? previous.lastCategory ?? "" : "";
         setGeneration(account.generation);
         setName(account.name);
         setSelectedCategory(category);
         setEntered(true);
-        const { data } = await supabase.from("surveys").select("*");
+        const { data, error } = await overallSchedule<{ surveys: any[] }>("list");
+        if (error) throw new Error(error.message);
         if (!current) return;
-        const surveys = sortSurveysByDate(data || []);
+        const surveys = sortSurveysByDate(data?.surveys || []);
         setAllSurveys(surveys);
         setupMySurveys(category, surveys);
-        if (SHOW_BAGGAGE_FORM) checkBaggageStatus(account.name);
+        if (SHOW_BAGGAGE_FORM) checkBaggageStatus();
       } catch {
         if (current) setSessionError("접속 상태를 확인하지 못했습니다.");
       } finally {
@@ -88,8 +96,9 @@ export default function Home() {
     return () => { current = false; };
   }, [restoreAttempt]);
 
-  const checkBaggageStatus = async (userName: string) => {
-    const { data } = await supabase.from("mission_baggage").select("*").eq("name", userName).maybeSingle();
+  const checkBaggageStatus = async () => {
+    const { data: result } = await overallSchedule<{ baggage: any }>("baggageRead");
+    const data = result?.baggage;
     if (data) {
       setIsBaggageSubmitted(true);
       setHasSleepingBag(data.has_sleeping_bag);
@@ -155,12 +164,14 @@ export default function Home() {
       if (!result.ok) return alert(result.error || "입장하지 못했습니다. 다시 시도해 주세요.");
 
       localStorage.setItem("missionUser", JSON.stringify({ generation: cleanGen, name: cleanName, lastCategory: selectedCategory }));
+      if (returnToAdmin()) return;
       setEntered(true);
-      const { data } = await supabase.from("surveys").select("*");
-      const surveys = sortSurveysByDate(data || []);
+      const { data, error } = await overallSchedule<{ surveys: any[] }>("list");
+      if (error) throw new Error(error.message);
+      const surveys = sortSurveysByDate(data?.surveys || []);
       setAllSurveys(surveys);
       setupMySurveys(selectedCategory, surveys);
-      if (SHOW_BAGGAGE_FORM) checkBaggageStatus(cleanName);
+      if (SHOW_BAGGAGE_FORM) checkBaggageStatus();
     } catch {
       alert("연결 상태를 확인하고 다시 시도해 주세요.");
     } finally {
@@ -190,18 +201,12 @@ export default function Home() {
     if (selectedSlots.length === 0) {
       if (!window.confirm("선택한 시간이 없습니다. 이대로 제출하시겠습니까?")) return;
     }
-    await supabase.from("survey_responses").delete().eq("survey_id", currentSurvey.id).eq("generation", generation.trim()).eq("name", name.trim());
-
-    const newResponse = {
-      survey_id: currentSurvey.id,
-      team: selectedCategory || "전체",
-      generation: generation.trim(),
-      name: name.trim(),
+    const { error } = await overallSchedule("vote", {
+      id: currentSurvey.id,
       slots: selectedSlots,
-      memo: voteMemo, 
-    };
-    const { error } = await supabase.from("survey_responses").insert([newResponse]);
-    if (error) return alert("투표 저장에 실패했습니다.");
+      memo: voteMemo,
+    });
+    if (error) return alert(error.message);
     
     alert("투표가 성공적으로 저장되었습니다! 🎉");
     setViewMode("list");
@@ -215,7 +220,9 @@ export default function Home() {
     setRsvpReason("");
     setMealStatus("");
     
-    const { data } = await supabase.from("rsvp_responses").select("*").eq("survey_id", survey.id).eq("generation", generation.trim()).eq("name", name.trim()).maybeSingle();
+    const { data: result, error } = await overallSchedule<{ rsvp: { status: "참석" | "부분참석" | "불참"; reason: string | null } | null }>("rsvpRead", { id: survey.id });
+    if (error) return alert(error.message);
+    const data = result?.rsvp;
     if (data) {
       setRsvpStatus(data.status as any);
       if (data.reason?.startsWith("[식사함] ")) {
@@ -240,23 +247,17 @@ export default function Home() {
       return alert("참석 가능 시간 또는 사유를 작성해주세요.");
     }
 
-    await supabase.from("rsvp_responses").delete().eq("survey_id", currentSurvey.id).eq("generation", generation.trim()).eq("name", name.trim());
-
     let finalReasonToSave = rsvpReason.trim();
     if (rsvpStatus !== "불참" && mealStatus) {
       finalReasonToSave = `[${mealStatus}] ${finalReasonToSave}`;
     }
 
-    const { error } = await supabase.from("rsvp_responses").insert([{
-      survey_id: currentSurvey.id,
-      team: selectedCategory || "전체",
-      generation: generation.trim(),
-      name: name.trim(),
+    const { error } = await overallSchedule("rsvp", {
+      id: currentSurvey.id,
       status: rsvpStatus,
-      reason: finalReasonToSave
-    }]);
-
-    if (error) return alert("저장에 실패했습니다.");
+      reason: finalReasonToSave,
+    });
+    if (error) return alert(error.message);
     alert("참석 여부가 저장되었습니다! ✅");
     setViewMode("list");
   };
@@ -269,25 +270,15 @@ export default function Home() {
     if (hasSleepingBag && sleepingBagCount < 1) return alert("침낭 수량을 확인해 주세요.");
     if (hasMat && matCount < 1) return alert("매트 수량을 확인해 주세요.");
 
-    // 기존 내역 지우기
-    await supabase.from("mission_baggage").delete().eq("name", name.trim());
-
-    // 🛠️ 명시적으로 uuid를 프론트에서 생성해 넘김으로써 DB의 uuid_generate_v4() 의존도 제거
-    const { error } = await supabase.from("mission_baggage").insert([{
-      id: crypto.randomUUID(), 
-      name: name.trim(),
+    const { error } = await overallSchedule("baggageSave", {
       has_sleeping_bag: hasSleepingBag,
       sleeping_bag_count: hasSleepingBag ? sleepingBagCount : 0,
       has_mat: hasMat,
       mat_count: hasMat ? matCount : 0,
-      other_items: otherItems.trim()
-    }]);
+      other_items: otherItems.trim(),
+    });
+    if (error) return alert(error.message);
 
-    if (error) {
-      console.error(error);
-      return alert(`물품 등록에 실패했습니다.\n사유: ${error.message}\n(RLS 권한 문제일 수 있습니다.)`);
-    }
-    
     alert("개인 물품 내역이 성공적으로 저장되었습니다! 🎒");
     setIsBaggageSubmitted(true);
     setViewMode("list");

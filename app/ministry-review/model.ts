@@ -1,5 +1,5 @@
-export type Person = { id: string; name: string };
-export type Team = { id: string; name: string; area: string; people: Person[] };
+export type Person = { id: string; name: string; role: '팀원' | '팀장' | '조교' };
+export type Team = { id: string; name: string; area: string; canCreate: boolean; people: Person[] };
 export type Vote = { slots: string[]; memo: string };
 export type Rsvp = { status: '참석' | '부분참석' | '불참'; reason: string; arrival: string; meal: boolean };
 export type Meeting = {

@@ -5,6 +5,15 @@ import { type Board, type Meeting, type Team, dateLabel, noticeTime, stateLabel 
 import { CandidateForm, VoteForm, NoticeForm, AttendanceForm, type Save } from './Forms';
 import './workbench.css';
 
+function TeamRoster({ team }: { team: Team }) {
+  return <details className="work-roster">
+    <summary>{team.name} 명단 · {team.people.length}명</summary>
+    <ul>{team.people.map(person => <li key={person.id}>
+      {person.name}{person.role !== '팀원' && <span className="work-badge">{person.role}</span>}
+    </li>)}</ul>
+  </details>;
+}
+
 export default function Workbench({ admin = false }: { admin?: boolean }) {
   const [board, setBoard] = useState<Board>();
   const actor = board?.actor ?? "";
@@ -41,7 +50,8 @@ export default function Workbench({ admin = false }: { admin?: boolean }) {
   const meeting = board?.meetings.find(item => item.id === selected);
   const team = board?.teams.find(item => item.id === meeting?.team);
   const manager = meeting?.canManage;
-  const manageable = board?.teams ?? [];
+  const creationTeams = board?.teams.filter(item => item.canCreate) ?? [];
+  const canCreateHere = creationTeams.some(item => filter === 'all' || item.id === filter);
   function open(id: string) { setSelected(id); setCreating(false); setForm(''); setFeedback(''); setCopyText(''); }
   function back() { setSelected(''); setCreating(false); setForm(''); setCopyText(''); }
   async function copy(text: string) {
@@ -84,7 +94,8 @@ export default function Workbench({ admin = false }: { admin?: boolean }) {
     <fieldset disabled={busy}>
     {board && !board.teams.length && <p className="work-empty">배정된 사역팀이 없습니다. 조교에게 확인해 주세요.</p>}
     {board && board.teams.length > 0 && !selected && !creating && <>
-      <div className="work-toolbar"><label>사역팀<select value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{admin ? '모든 사역팀' : '내 사역 전체'}</option>{board.teams.map(item => <option key={item.id} value={item.id}>{item.area} · {item.name}</option>)}</select></label>{manageable.length > 0 && <button className="work-primary" onClick={() => { if (filter === 'all') setFilter(manageable[0].id); setKind(''); setCreating(true); }}>＋ 모임 만들기</button>}</div>
+      <div className="work-toolbar"><label>사역팀<select value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{admin ? '모든 사역팀' : '내 사역 전체'}</option>{board.teams.map(item => <option key={item.id} value={item.id}>{item.area} · {item.name}</option>)}</select></label>{canCreateHere && <button className="work-primary" onClick={() => { if (filter === 'all') setFilter(creationTeams[0].id); setKind(''); setCreating(true); }}>＋ 모임 만들기</button>}</div>
+      {!admin && board.teams.filter(item => filter === 'all' || item.id === filter).map(item => <TeamRoster key={item.id} team={item} />)}
       {admin && <>
         <div className="work-chips" role="group" aria-label="진행 상황 필터">{[['all','전체'],['pending','미투표자 있음'],['ready','투표 완료 · 미확정']].map(([value,label]) => <button key={value} aria-pressed={attention === value} onClick={() => setAttention(value)}>{label}</button>)}</div>
         <div className="work-team-grid">{board.teams.filter(item => filter === 'all' || item.id === filter).filter(item => {
@@ -95,7 +106,7 @@ export default function Workbench({ admin = false }: { admin?: boolean }) {
         }).map(item => {
           const polls = board.meetings.filter(poll => poll.team === item.id && poll.status === 'voting');
           const next = board.meetings.filter(poll => poll.team === item.id && poll.status === 'confirmed' && new Date(poll.confirmed + ':00+09:00').getTime() >= Date.now()).sort(byDate)[0];
-          return <article className="work-team" key={item.id}><small>{item.area}</small><h3>{item.name}</h3><p className="work-muted">팀원 {item.people.length}명</p>{polls.length ? polls.map(poll => <button className="work-team-poll" key={poll.id} onClick={() => open(poll.id)}><strong>{poll.title}</strong><span>{Object.keys(poll.votes).length}/{item.people.length}명 · {stateLabel(poll)}</span></button>) : <p className="work-muted">진행 중인 투표 없음</p>}<p>{next ? `다음 모임 · ${noticeTime(next)}` : '다음 확정 일정 없음'}</p><button onClick={() => { setFilter(item.id); setAttention('all'); }}>팀 일정 보기</button></article>;
+          return <article className="work-team" key={item.id}><small>{item.area}</small><h3>{item.name}</h3><TeamRoster team={item} />{polls.length ? polls.map(poll => <button className="work-team-poll" key={poll.id} onClick={() => open(poll.id)}><strong>{poll.title}</strong><span>{Object.keys(poll.votes).length}/{item.people.length}명 · {stateLabel(poll)}</span></button>) : <p className="work-muted">진행 중인 투표 없음</p>}<p>{next ? `다음 모임 · ${noticeTime(next)}` : '다음 확정 일정 없음'}</p><button onClick={() => { setFilter(item.id); setAttention('all'); }}>팀 일정 보기</button></article>;
         })}</div>
       </>}
       {lists.map(list => <div className="work-section" key={list.label}><h3>{list.label} <small>{list.items.length}</small></h3>{list.items.length ? list.items.map(card) : <p className="work-empty">등록된 일정이 없습니다.</p>}</div>)}
@@ -105,7 +116,7 @@ export default function Workbench({ admin = false }: { admin?: boolean }) {
       <button onClick={back}>← 일정 목록</button>
       <h2>모임 만들기</h2>
       <p>같은 모임이 두 번 올라오지 않도록 팀에서 한 분이 대표로 등록해 주세요.</p>
-      <label>생성할 팀<select value={filter} onChange={e => setFilter(e.target.value)}>{manageable.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label>생성할 팀<select value={filter} onChange={e => setFilter(e.target.value)}>{creationTeams.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <div className="work-chips" role="group" aria-label="모임 생성 방식">
         <button aria-pressed={kind === 'survey'} onClick={() => setKind('survey')}>참석 가능 날짜 조사</button>
         <button aria-pressed={kind === 'notice'} onClick={() => setKind('notice')}>확정 공지로 참석 받기</button>
@@ -115,7 +126,7 @@ export default function Workbench({ admin = false }: { admin?: boolean }) {
     </>}
     {meeting && team && <>
       <button onClick={back}>← 일정 목록</button>
-      <header className="work-detail-head"><span className={'work-tag ' + meeting.status}>{team.area} · {team.name} · {stateLabel(meeting)}</span><h2>{meeting.title}</h2>{meeting.createdBy && <p className="work-muted">작성자 · {meeting.createdBy}</p>}<p>{meeting.description}</p><details><summary>팀원 {team.people.length}명</summary><p>{team.people.map(person => person.name).join(', ')}</p></details></header>
+      <header className="work-detail-head"><span className={'work-tag ' + meeting.status}>{team.area} · {team.name} · {stateLabel(meeting)}</span><h2>{meeting.title}</h2>{meeting.createdBy && <p className="work-muted">작성자 · {meeting.createdBy}</p>}<p>{meeting.description}</p><TeamRoster team={team} /></header>
       {form === 'candidates' ? <CandidateForm meeting={meeting} team={team.id} save={save} done={() => setForm('')} /> : form === 'notice' ? <NoticeForm team={team.id} meeting={meeting} people={team.people} save={save} done={() => setForm('')} /> : <>
         {meeting.status === 'voting' && <>
           {!admin && <VoteForm key={`${meeting.id}-${actor}-${meeting.version}`} meeting={meeting} actor={actor} save={save} />}

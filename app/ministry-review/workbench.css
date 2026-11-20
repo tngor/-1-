@@ -75,3 +75,8 @@
 @media(max-width:480px){.ministryWork .work-go{max-width:65px}.ministryWork .work-meeting{padding:12px}.ministryWork .work-form,.ministryWork .work-manager{padding:12px}.ministryWork .work-heading h2{font-size:20px}}
 
 .ministryWork .work-danger{color:#991b1b;border-color:#fecaca;margin:12px 0}
+
+.ministryWork .work-roster{margin:8px 0;font-size:13px}
+.ministryWork .work-roster summary{cursor:pointer;font-weight:700}
+.ministryWork .work-roster ul{display:flex;flex-wrap:wrap;gap:8px 14px;margin:8px 0;list-style:none;padding:0}
+.ministryWork .work-roster li{display:flex;align-items:center;gap:4px}

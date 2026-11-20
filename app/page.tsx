@@ -13,6 +13,9 @@ export default function Home() {
   const [generation, setGeneration] = useState("");
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+  const [sessionError, setSessionError] = useState('');
   const [entered, setEntered] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -43,27 +46,47 @@ export default function Home() {
   const [isBaggageSubmitted, setIsBaggageSubmitted] = useState(false);
 
   useEffect(() => {
-    fetchSurveys();
-  }, []);
-
-  const fetchSurveys = async () => {
-    const { data } = await supabase.from("surveys").select("*");
-    const fetchedSurveys = sortSurveysByDate(data || []);
-    setAllSurveys(fetchedSurveys);
-
-    const savedUser = localStorage.getItem("missionUser");
-    if (savedUser) {
-      const parsed = JSON.parse(savedUser);
-      setGeneration(parsed.generation);
-      setName(parsed.name);
-      setEntered(true);
-      if (parsed.lastCategory) {
-        setSelectedCategory(parsed.lastCategory);
-        setupMySurveys(parsed.lastCategory, fetchedSurveys);
+    let current = true;
+    async function restore() {
+      setCheckingSession(true);
+      setSessionError('');
+      try {
+        const response = await fetch("/api/ministry", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({operation:"session"}) });
+        if (!current) return;
+        const saved = localStorage.getItem("missionUser");
+        let previous;
+        try { previous = saved ? JSON.parse(saved) : null; } catch { previous = null; }
+        if (response.status === 401) {
+          if (previous) {
+            setGeneration(String(previous.generation ?? ""));
+            setName(String(previous.name ?? ""));
+            setSelectedCategory(previous.lastCategory ?? "");
+          }
+          return;
+        }
+        if (!response.ok) throw new Error();
+        const account = await response.json();
+        if (!current) return;
+        const category = previous?.name === account.name && String(previous.generation) === account.generation ? previous.lastCategory ?? "" : "";
+        setGeneration(account.generation);
+        setName(account.name);
+        setSelectedCategory(category);
+        setEntered(true);
+        const { data } = await supabase.from("surveys").select("*");
+        if (!current) return;
+        const surveys = sortSurveysByDate(data || []);
+        setAllSurveys(surveys);
+        setupMySurveys(category, surveys);
+        if (SHOW_BAGGAGE_FORM) checkBaggageStatus(account.name);
+      } catch {
+        if (current) setSessionError("접속 상태를 확인하지 못했습니다.");
+      } finally {
+        if (current) setCheckingSession(false);
       }
-      if (SHOW_BAGGAGE_FORM) checkBaggageStatus(parsed.name);
     }
-  };
+    void restore();
+    return () => { current = false; };
+  }, [restoreAttempt]);
 
   const checkBaggageStatus = async (userName: string) => {
     const { data } = await supabase.from("mission_baggage").select("*").eq("name", userName).maybeSingle();
@@ -133,7 +156,10 @@ export default function Home() {
 
       localStorage.setItem("missionUser", JSON.stringify({ generation: cleanGen, name: cleanName, lastCategory: selectedCategory }));
       setEntered(true);
-      fetchSurveys();
+      const { data } = await supabase.from("surveys").select("*");
+      const surveys = sortSurveysByDate(data || []);
+      setAllSurveys(surveys);
+      setupMySurveys(selectedCategory, surveys);
       if (SHOW_BAGGAGE_FORM) checkBaggageStatus(cleanName);
     } catch {
       alert("연결 상태를 확인하고 다시 시도해 주세요.");
@@ -271,7 +297,7 @@ export default function Home() {
     <main className="min-h-screen w-full bg-slate-50 text-slate-800 flex flex-col justify-start items-center px-4 py-6 font-sans selection:bg-blue-100">
       <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
         
-        {!entered ? (
+        {checkingSession ? <p role="status">일정을 불러오는 중입니다…</p> : sessionError ? <div role="alert">{sessionError} <button onClick={() => setRestoreAttempt(value => value + 1)}>다시 시도</button></div> : !entered ? (
           <div className="py-2 animate-fade-in">
             <div className="text-center mb-6">
               <span className="text-xs bg-blue-50 text-blue-600 font-bold px-3 py-1 rounded-full uppercase tracking-wider">SYDC</span>

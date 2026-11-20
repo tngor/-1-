@@ -38,7 +38,7 @@ export function attendanceShare(title: string, responses: Attendance[], members:
       title,
       `참석 : ${attending.length}명`,
       reasons,
-      [`미투표자 : ${unresponsive.length}명`, ...unresponsive.map(person => `• ${memberLabel(person)}`)].join("\n"),
+      [`미응답자 : ${unresponsive.length}명`, ...unresponsive.map(person => `• ${memberLabel(person)}`)].join("\n"),
       `식사 인원 : ${mealCount}명`,
     ].join("\n\n"),
     reasons: `${title}\n\n${reasons}`,

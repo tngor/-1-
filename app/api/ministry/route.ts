@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "../../../lib/supabase";
 
 const cookieName = "mission_member_session";
+const cookieOptions = {httpOnly:true, sameSite:"lax" as const, secure:process.env.NODE_ENV==="production",path:"/api/ministry",maxAge:14*86400};
 const reply = (data: unknown, status = 200) => NextResponse.json(data, {status, headers: {"Cache-Control":"private, no-store"}});
 
 export async function POST(request: NextRequest) {
@@ -17,13 +18,13 @@ export async function POST(request: NextRequest) {
       if (error) return reply({error:"로그인 정보를 확인할 수 없습니다."},503);
       if (!data?.session) return reply(data,data?.missing ? 200 : 401);
       const response = reply({ok:true});
-      response.cookies.set(cookieName,data.session,{httpOnly:true, sameSite:"lax", secure:process.env.NODE_ENV==="production",path:"/api/ministry",maxAge:14*86400});
+      response.cookies.set(cookieName,data.session,cookieOptions);
       return response;
     }
     const token=request.cookies.get(cookieName)?.value ?? "";
     if (input.operation === "schedule") {
       if (!token) return reply({expired: true}, 401);
-      const allowed = ["read", "create", "editCandidates", "vote", "confirm", "editNotice", "rsvp", "close", "reopen", "cancel", "archive"];
+      const allowed = ["read", "create", "createNotice", "editCandidates", "vote", "confirm", "editNotice", "rsvp", "delete", "cancel", "archive"];
       if (!allowed.includes(input.action)) return reply({error: "지원하지 않는 작업입니다."}, 400);
       const {data, error} = await supabase.rpc("mission_schedule", {
         token, operation: input.action, payload: input.payload ?? {}, admin_view: input.adminView === true,
@@ -34,6 +35,8 @@ export async function POST(request: NextRequest) {
       }
       return reply(data, data?.expired ? 401 : 200);
     }
+    if (!["session","logout","read"].includes(input.operation)) return reply({error:"화면을 새로고침해 주세요."},400);
+    if (!token) return reply({expired:true},401);
     const {data,error}=await supabase.rpc("mission_action",{token,operation:input.operation,payload:input.payload ?? {}});
     if (error) return reply({error:error.code==="P0001"?error.message:"일정을 저장할 수 없습니다. 다시 확인해 주세요."},400);
     if (input.operation==="logout" || data?.expired) {
@@ -41,6 +44,8 @@ export async function POST(request: NextRequest) {
       response.cookies.set(cookieName,"",{path:"/api/ministry",maxAge:0});
       return response;
     }
-    return reply(data);
+    const response=reply(data);
+    if (input.operation==="session") response.cookies.set(cookieName,token,cookieOptions);
+    return response;
   } catch { return reply({error:"요청을 처리할 수 없습니다."},400); }
 }

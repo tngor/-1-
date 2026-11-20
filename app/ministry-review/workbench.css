@@ -73,3 +73,5 @@
 .ministryWork .work-team small{font-size:11px;color:#64748b}
 .ministryWork .work-team-poll{width:100%;display:flex;flex-direction:column;align-items:flex-start;margin:8px 0;gap:5px;text-align:left}
 @media(max-width:480px){.ministryWork .work-go{max-width:65px}.ministryWork .work-meeting{padding:12px}.ministryWork .work-form,.ministryWork .work-manager{padding:12px}.ministryWork .work-heading h2{font-size:20px}}
+
+.ministryWork .work-danger{color:#991b1b;border-color:#fecaca;margin:12px 0}
